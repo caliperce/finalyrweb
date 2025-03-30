@@ -1,0 +1,16 @@
+{
+  "name": "finalyr",
+  "version": "1.0.0",
+  "main": "test-camera.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "onoff": "^6.0.3",
+    "rpi-gpio": "^2.1.7"
+  }
+}
