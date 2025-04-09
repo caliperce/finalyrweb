@@ -8,9 +8,19 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "description": "",
   "dependencies": {
+    "dotenv": "^16.4.7",
     "onoff": "^6.0.3",
-    "rpi-gpio": "^2.1.7"
-  }
+    "rpi-gpio": "^2.1.7",
+    "twilio": "^5.5.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/caliperce/finalyr.git"
+  },
+  "bugs": {
+    "url": "https://github.com/caliperce/finalyr/issues"
+  },
+  "homepage": "https://github.com/caliperce/finalyr#readme",
+  "description": ""
 }

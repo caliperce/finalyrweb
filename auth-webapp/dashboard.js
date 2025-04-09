@@ -9,7 +9,7 @@ const SERVER_CONFIG = {
 };
 
 // Use the appropriate server URL based on your location
-const SERVER_URL = SERVER_CONFIG.LOCATION_1; // Change to LOCATION_2 when needed
+const SERVER_URL = SERVER_CONFIG.LOCATION_2; // Change to LOCATION_2 when needed
 
 document.addEventListener('DOMContentLoaded', () => {
     // Get DOM elements
@@ -86,6 +86,9 @@ document.addEventListener('DOMContentLoaded', () => {
         // Display user email
         userEmailElement.textContent = user.email;
         
+        // Check for phone number and show modal if needed
+        await checkAndCollectPhoneNumber(user);
+        
         // Load license plates
         await loadLicensePlates();
         
@@ -96,6 +99,69 @@ document.addEventListener('DOMContentLoaded', () => {
         // Start monitoring active parking entries
         setupActiveParkingMonitor();
     });
+
+    // Function to check and collect phone number
+    async function checkAndCollectPhoneNumber(user) {
+        try {
+            // Get user document
+            const userDocRef = doc(db, 'users', user.uid);
+            const userDoc = await getDoc(userDocRef);
+            
+            if (!userDoc.exists()) {
+                console.error("User document not found");
+                return;
+            }
+            
+            const userData = userDoc.data();
+            
+            // If phone number doesn't exist, show the modal
+            if (!userData.phoneNumber) {
+                // Show the modal
+                $('#phone-number-modal').modal({
+                    closable: false,
+                    onDeny: function() {
+                        return false; // Prevent closing
+                    }
+                }).modal('show');
+                
+                // Set up save button handler
+                const savePhoneBtn = document.getElementById('save-phone-btn');
+                const phoneInput = document.getElementById('phone-number-input');
+                const phoneError = document.getElementById('phone-error');
+                
+                savePhoneBtn.addEventListener('click', async () => {
+                    const phoneNumber = phoneInput.value.trim();
+                    
+                    // Validate phone number
+                    if (!phoneNumber || !phoneNumber.startsWith('+')) {
+                        phoneError.textContent = 'Please enter a valid phone number with country code (e.g., +919962973049)';
+                        phoneError.style.display = 'block';
+                        return;
+                    }
+                    
+                    try {
+                        // Update user document with phone number
+                        await updateDoc(userDocRef, {
+                            phoneNumber: phoneNumber
+                        });
+                        
+                        // Hide modal and clear error
+                        $('#phone-number-modal').modal('hide');
+                        phoneError.style.display = 'none';
+                        
+                        // Show success notification
+                        showNotification('Phone number saved successfully!', 'success');
+                    } catch (error) {
+                        console.error('Error saving phone number:', error);
+                        phoneError.textContent = 'Failed to save phone number. Please try again.';
+                        phoneError.style.display = 'block';
+                    }
+                });
+            }
+        } catch (error) {
+            console.error('Error checking phone number:', error);
+        }
+    }
 
     // Load and display user's license plates
     async function loadLicensePlates() {

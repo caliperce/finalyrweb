@@ -335,6 +335,32 @@
         </div>
     </div>
 
+    <!-- Phone Number Collection Modal -->
+    <div class="ui modal" id="phone-number-modal">
+        <i class="close icon"></i>
+        <div class="header">
+            <i class="phone icon"></i> Add Your Phone Number
+        </div>
+        <div class="content">
+            <div class="ui form">
+                <div class="field">
+                    <label>Phone Number</label>
+                    <div class="ui left icon input">
+                        <i class="phone icon"></i>
+                        <input type="tel" id="phone-number-input" placeholder="Enter your phone number with country code (e.g., +919962973049)">
+                    </div>
+                </div>
+                <div class="ui error message" id="phone-error"></div>
+            </div>
+        </div>
+        <div class="actions">
+            <div class="ui primary button" id="save-phone-btn">
+                <i class="save icon"></i>
+                Save Phone Number
+            </div>
+        </div>
+    </div>
+
     <script src="firebase.js" type="module"></script>
     <script src="dashboard.js" type="module"></script>
 </body>

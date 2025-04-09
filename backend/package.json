@@ -18,13 +18,15 @@
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
+    "firebase-admin": "^13.2.0",
     "form-data": "^4.0.2",
     "multer": "^1.4.5-lts.1",
     "node-webcam": "^0.8.2",
     "onoff": "^6.0.3",
     "openai": "^4.88.0",
     "rpi-gpio": "^2.1.7",
-    "socket.io": "^4.8.1"
+    "socket.io": "^4.8.1",
+    "twilio": "^4.19.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"
