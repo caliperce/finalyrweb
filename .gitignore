@@ -19,4 +19,7 @@ __pycache__/
 .vscode/
 .idea/
 *.swp
-*.swo 
+*.swo
+
+# Firebase credentials
+backend/userinfo-10027-firebase-adminsdk-fbsvc-141115c0e9.json 
