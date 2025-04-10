@@ -22,4 +22,7 @@ __pycache__/
 *.swo
 
 # Firebase credentials
-backend/userinfo-10027-firebase-adminsdk-fbsvc-141115c0e9.json 
+backend/userinfo-10027-firebase-adminsdk-fbsvc-141115c0e9.json
+
+# Additional files
+.DS_Store 

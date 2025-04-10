@@ -1,3 +1,5 @@
+require('dotenv').config();
+
 const { startContinuousCapture } = require('./camera-client');
 
 // Configuration

@@ -4,12 +4,15 @@ import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/
 
 // Server Configuration
 const SERVER_CONFIG = {
-    LOCATION_1: 'http://192.168.90.27:3001',
+    LOCATION_1: 'http://192.168.90.127:3001',
     LOCATION_2: 'http://192.168.0.123:3001'
 };
 
 // Use the appropriate server URL based on your location
-const SERVER_URL = SERVER_CONFIG.LOCATION_2; // Change to LOCATION_2 when needed
+const SERVER_URL = SERVER_CONFIG.LOCATION_1; // Change to LOCATION_2 when needed
+
+// Log the server URL for debugging
+console.log('🌐 Using server URL:', SERVER_URL);
 
 document.addEventListener('DOMContentLoaded', () => {
     // Get DOM elements
@@ -974,7 +977,9 @@ function showNotification(message, type = 'info') {
 async function pollForNewEntries() {
     try {
         console.log('🔄 Polling for new entries...');
-        const response = await fetch(`${SERVER_URL}/latest-entry`);
+        console.log('🌐 Using server URL:', SERVER_URL);
+        const timestamp = new Date().getTime();
+        const response = await fetch(`${SERVER_URL}/latest-entry?v=${timestamp}`);
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
@@ -1050,7 +1055,9 @@ function setupExitListener() {
 async function pollForExits() {
     try {
         console.log('🔄 Polling for vehicle exits...');
-        const response = await fetch(`${SERVER_URL}/latest-exit`);
+        console.log('🌐 Using server URL:', SERVER_URL);
+        const timestamp = new Date().getTime();
+        const response = await fetch(`${SERVER_URL}/latest-exit?v=${timestamp}`);
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }

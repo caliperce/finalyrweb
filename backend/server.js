@@ -1,4 +1,10 @@
 require('dotenv').config();
+// Debug logging for environment variables
+console.log('Environment Variables Check:');
+console.log('AWS_REGION:', process.env.AWS_REGION);
+console.log('AWS_ACCESS_KEY_ID:', process.env.AWS_ACCESS_KEY_ID ? 'Present' : 'Missing');
+console.log('S3_BUCKET:', process.env.S3_BUCKET);
+
 const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
@@ -8,6 +14,37 @@ const { setupOpenAI } = require('./utils/openaiHandler');
 const admin = require('firebase-admin');
 const twilio = require('twilio');
 const { calculateParkingFee } = require('./utils/parkingCalculator');
+const { sendParkingMessage } = require('../twilio.js');  // Import the new twilio module
+
+// Initialize Express app
+const app = express();
+const PORT = process.env.PORT || 3001;
+const HOST = '0.0.0.0';
+
+// Middleware
+app.use(cors({
+    origin: '*',  // Allow all origins
+    methods: ['GET', 'POST'],  // Allow GET and POST methods
+    allowedHeaders: ['Content-Type']  // Allow Content-Type header
+}));
+
+// Add cache prevention middleware
+app.use((req, res, next) => {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+    res.set('Expires', '-1');
+    res.set('Pragma', 'no-cache');
+    next();
+});
+
+app.use(express.json());
+
+// Configure multer for handling file uploads
+const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: {
+        fileSize: 5 * 1024 * 1024, // 5MB limit
+    },
+});
 
 // Initialize Firebase Admin
 const serviceAccount = require('./userinfo-10027-firebase-adminsdk-fbsvc-141115c0e9.json');
@@ -20,43 +57,6 @@ const db = admin.firestore();
 const accountSid = process.env.TWILIO_ACCOUNT_SID;
 const authToken = process.env.TWILIO_AUTH_TOKEN;
 const client = twilio(accountSid, authToken);
-
-// Function to send SMS using Twilio
-async function sendParkingExitSMS(phoneNumber, duration, fee) {
-    try {
-        const message = await client.messages.create({
-            body: `The total time duration you've parked is: ${duration} and you've to pay an amount of $${fee.toFixed(2)}. Visit this link to pay the parking fee: http://127.0.0.1:5500/auth-webapp/dashboard.html`,
-            messagingServiceSid: process.env.TWILIO_MESSAGING_SERVICE_SID,
-            to: phoneNumber
-        });
-        console.log('SMS sent successfully:', message.sid);
-        return true;
-    } catch (error) {
-        console.error('Error sending SMS:', error);
-        return false;
-    }
-}
-
-// Initialize Express app
-const app = express();
-const PORT = process.env.PORT || 3001;  // Using port 3001
-const HOST = '0.0.0.0';
-
-// Middleware
-app.use(cors({
-    origin: '*',  // Allow all origins
-    methods: ['GET', 'POST'],  // Allow GET and POST methods
-    allowedHeaders: ['Content-Type']  // Allow Content-Type header
-}));
-app.use(express.json());
-
-// Configure multer for handling file uploads
-const upload = multer({
-    storage: multer.memoryStorage(),
-    limits: {
-        fileSize: 5 * 1024 * 1024, // 5MB limit
-    },
-});
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -107,7 +107,7 @@ app.get('/test-exit/:licensePlate', async (req, res) => {
                 const fee = 5.00;
                 
                 // Send SMS notification
-                await sendParkingExitSMS(userData.phoneNumber, duration, fee);
+                await sendParkingMessage(userData.phoneNumber, duration, fee);
                 console.log('📱 SMS notification sent to:', userData.phoneNumber);
             } else {
                 console.log('⚠️ User has no phone number registered');
@@ -132,7 +132,6 @@ app.get('/latest-entry', (req, res) => {
     }
     res.json({ success: true, data: global.latestEntry });
 });
-
 // Endpoint to get latest exit
 app.get('/latest-exit', async (req, res) => {
     try {
@@ -141,9 +140,88 @@ app.get('/latest-exit', async (req, res) => {
             return res.json({ success: true, data: null });
         }
 
-        // For testing, just return the exit data directly
-        console.log('📤 Sending exit data:', global.latestExit);
-        return res.json({ success: true, data: global.latestExit });
+        const exitData = global.latestExit;
+        console.log('📤 Processing exit data:', exitData);
+
+        // Find the user with this license plate
+        const usersRef = db.collection('users');
+        console.log('🔍 Searching for user with license plate:', exitData.licensePlate);
+        const snapshot = await usersRef.where('licensePlates', 'array-contains', exitData.licensePlate).get();
+
+        if (!snapshot.empty) {
+            const userDoc = snapshot.docs[0];
+            const userData = userDoc.data();
+            console.log('✅ Found user:', userData.email);
+
+            // Find active parking entry for this license plate
+            const activeParkingRef = db.collection('active_parking');
+            const q = db.collection('active_parking').where('licensePlate', '==', exitData.licensePlate).where('status', '==', 'active');
+            
+            const parkingSnapshot = await q.get();
+            
+            if (!parkingSnapshot.empty) {
+                const parkingDoc = parkingSnapshot.docs[0];
+                const parkingData = parkingDoc.data();
+
+                // Calculate duration and fee
+                const entryTime = new Date(parkingData.entryTimestamp);
+                const exitTime = new Date(exitData.exitTimestamp);
+                const durationMs = exitTime - entryTime;
+
+                // Format duration
+                const hours = Math.floor(durationMs / 3600000);
+                const minutes = Math.floor((durationMs % 3600000) / 60000);
+                const formattedDuration = `${hours} hours, ${minutes} minutes`;
+
+                // Calculate fee ($2 per hour, minimum 1 hour)
+                const hourlyRate = 2;
+                const billableHours = Math.max(1, Math.ceil(durationMs / 3600000));
+                const parkingFee = billableHours * hourlyRate;
+
+                if (userData.phoneNumber) {
+                    console.log('📱 Attempting to send SMS to:', userData.phoneNumber);
+                    console.log('SMS Details:', {
+                        duration: formattedDuration,
+                        fee: parkingFee,
+                        phone: userData.phoneNumber
+                    });
+
+                    // Send SMS notification
+                    try {
+                        const smsSent = await sendParkingMessage(
+                            userData.phoneNumber,
+                            formattedDuration,
+                            parkingFee
+                        );
+                        
+                        if (smsSent) {
+                            console.log('✅ SMS sent successfully');
+                        } else {
+                            console.log('❌ Failed to send SMS');
+                        }
+                    } catch (smsError) {
+                        console.error('❌ Error sending SMS:', smsError);
+                        console.error('Error details:', smsError);
+                    }
+                } else {
+                    console.log('⚠️ User has no phone number registered');
+                }
+
+                // Update parking entry status
+                await parkingDoc.ref.update({
+                    status: 'pending_payment',
+                    exitTimestamp: exitData.exitTimestamp,
+                    parkingDuration: formattedDuration,
+                    parkingFee: parkingFee
+                });
+            }
+        } else {
+            console.log('⚠️ No user found with license plate:', exitData.licensePlate);
+        }
+
+        // Return the exit data
+        console.log('📤 Sending exit data:', exitData);
+        return res.json({ success: true, data: exitData });
     } catch (error) {
         console.error('Error in latest-exit endpoint:', error);
         return res.status(500).json({ success: false, error: error.message });
@@ -154,6 +232,10 @@ app.get('/latest-exit', async (req, res) => {
 app.get('/test-exit-with-sms/:licensePlate', async (req, res) => {
     try {
         console.log('🔄 Testing exit with SMS for license plate:', req.params.licensePlate);
+        console.log('🔍 Checking environment variables:');
+        console.log('   - TWILIO_ACCOUNT_SID:', process.env.TWILIO_ACCOUNT_SID ? 'Present' : 'Missing');
+        console.log('   - TWILIO_AUTH_TOKEN:', process.env.TWILIO_AUTH_TOKEN ? 'Present' : 'Missing');
+        console.log('   - TWILIO_PHONE_NUMBER:', process.env.TWILIO_PHONE_NUMBER ? process.env.TWILIO_PHONE_NUMBER : 'Missing');
         
         // Create test exit data
         const testExitData = {
@@ -169,6 +251,7 @@ app.get('/test-exit-with-sms/:licensePlate', async (req, res) => {
         
         // Find the user with this license plate
         const usersRef = db.collection('users');
+        console.log('🔍 Searching for user with license plate:', req.params.licensePlate);
         const snapshot = await usersRef.where('licensePlates', 'array-contains', req.params.licensePlate).get();
         
         if (snapshot.empty) {
@@ -179,6 +262,7 @@ app.get('/test-exit-with-sms/:licensePlate', async (req, res) => {
         // Get the user document
         const userDoc = snapshot.docs[0];
         const userData = userDoc.data();
+        console.log('✅ Found user:', userData.email);
         
         // Check if user has a phone number
         if (!userData.phoneNumber) {
@@ -188,6 +272,7 @@ app.get('/test-exit-with-sms/:licensePlate', async (req, res) => {
         
         // Find the active parking entry
         const activeParkingRef = db.collection('active_parking');
+        console.log('🔍 Searching for active parking entry...');
         const parkingSnapshot = await activeParkingRef
             .where('licensePlate', '==', req.params.licensePlate)
             .where('status', '==', 'active')
@@ -200,20 +285,25 @@ app.get('/test-exit-with-sms/:licensePlate', async (req, res) => {
         
         const parkingDoc = parkingSnapshot.docs[0];
         const parkingData = parkingDoc.data();
+        console.log('✅ Found active parking entry:', parkingData);
         
         // Calculate duration and fee
         const entryTime = new Date(parkingData.entryTimestamp);
         const exitTime = new Date();
         const { duration, fee } = calculateParkingFee(entryTime, exitTime);
+        console.log('💰 Calculated parking fee:', { duration, fee });
         
         // Send SMS
-        const smsSent = await sendParkingExitSMS(userData.phoneNumber, duration, fee);
+        console.log('📱 Attempting to send SMS to:', userData.phoneNumber);
+        const smsSent = await sendParkingMessage(userData.phoneNumber, duration, fee);
         
         if (!smsSent) {
+            console.log('❌ Failed to send SMS');
             return res.status(500).json({ error: 'Failed to send SMS' });
         }
         
         // Update parking entry status
+        console.log('📝 Updating parking entry status...');
         await parkingDoc.ref.update({
             status: 'pending_payment',
             exitTimestamp: testExitData.exitTimestamp,
@@ -234,6 +324,7 @@ app.get('/test-exit-with-sms/:licensePlate', async (req, res) => {
         });
     } catch (error) {
         console.error('❌ Error processing test exit:', error);
+        console.error('Error stack:', error.stack);
         res.status(500).json({ error: error.message });
     }
 });
@@ -257,30 +348,45 @@ app.post('/upload/entry', upload.single('image'), async (req, res) => {
         });
 
         console.log('🔄 Processing image...');
-        const result = await processImage(req.file, 'entry');
-        console.log('✅ Image processing completed');
-        console.log('Raw result:', result);
-        
-        // The analysis is already an object, no need to parse
-        const analysisObj = result.analysis;
-        console.log('Analysis object:', analysisObj);
-        
-        // Extract license plate from the analysis object
-        const licensePlate = analysisObj.license_plate;
-        console.log('🔍 License plate detected:', licensePlate);
-        
-        const responseData = {
-            success: true,
-            licensePlate,
-            timestamp: result.timestamp,
-            imageUrl: result.imageUrl
-        };
-        
-        // Store the latest entry globally
-        global.latestEntry = responseData;
-        
-        console.log('📤 Sending response to frontend:', responseData);
-        res.json(responseData);
+        try {
+            const result = await processImage(req.file, 'entry');
+            console.log('✅ Image processing completed');
+            console.log('Raw result:', result);
+            
+            // The analysis is already an object, no need to parse
+            const analysisObj = result.analysis;
+            console.log('Analysis object:', analysisObj);
+            
+            // Extract license plate from the analysis object
+            const licensePlate = analysisObj.license_plate;
+            console.log('🔍 License plate detected:', licensePlate);
+            
+            const responseData = {
+                success: true,
+                licensePlate,
+                timestamp: result.timestamp,
+                imageUrl: result.imageUrl
+            };
+            
+            // Store the latest entry globally
+            global.latestEntry = responseData;
+            
+            console.log('📤 Sending response to frontend:', responseData);
+            res.json(responseData);
+        } catch (processError) {
+            console.error('❌ Error in processImage:', processError);
+            console.error('Error stack:', processError.stack);
+            console.error('Error details:', {
+                message: processError.message,
+                code: processError.code,
+                region: process.env.AWS_REGION,
+                bucket: process.env.S3_BUCKET
+            });
+            res.status(500).json({ 
+                error: 'Failed to process entry image',
+                details: processError.message 
+            });
+        }
         console.log('=== Entry Request Completed ===\n');
     } catch (error) {
         console.error('❌ Error processing entry image:', error);
@@ -293,51 +399,165 @@ app.post('/upload/entry', upload.single('image'), async (req, res) => {
 app.post('/upload/exit', upload.single('image'), async (req, res) => {
     try {
         console.log('=== New Exit Request Received ===');
-        console.log('Timestamp:', new Date().toISOString());
+        console.log('Request received at:', new Date().toISOString());
         
         if (!req.file) {
             console.log('❌ Error: No image file provided');
             return res.status(400).json({ error: 'No image file provided' });
         }
-        
-        console.log('📸 Exit image received successfully');
-        console.log('Image details:', {
+
+        // Get custom message from request body if provided
+        const customMessage = req.body.customMessage || null;
+        console.log('📝 Custom message provided:', customMessage);
+
+        console.log('📸 Image received:', {
             filename: req.file.originalname,
             size: req.file.size,
             mimetype: req.file.mimetype
         });
 
+        // Process the exit image
         console.log('🔄 Processing exit image...');
         const result = await processImage(req.file, 'exit');
-        console.log('✅ Exit image processing completed');
-        console.log('Raw result:', result);
+        console.log('✅ Image processing completed:', result);
         
-        // The analysis is already an object, no need to parse
-        const analysisObj = result.analysis;
-        console.log('Analysis object:', analysisObj);
+        const licensePlate = result.analysis.license_plate;
+        const exitTimestamp = result.timestamp;
         
-        // Extract license plate from the analysis object
-        const licensePlate = analysisObj.license_plate;
-        console.log('🔍 License plate detected at exit:', licensePlate);
+        console.log('🔍 License plate detected:', licensePlate);
+        console.log('🕒 Exit timestamp:', exitTimestamp);
+
+        // Find active parking entry for this license plate
+        console.log('🔍 Searching for active parking entry...');
+        const activeParkingRef = db.collection('active_parking');
+        const q = db.collection('active_parking').where('licensePlate', '==', licensePlate).where('status', '==', 'active');
         
+        const querySnapshot = await q.get();
+        
+        if (querySnapshot.empty) {
+            console.log('❌ No active parking found for license plate:', licensePlate);
+            return res.status(404).json({ error: 'No active parking found' });
+        }
+
+        console.log('✅ Found active parking entry');
+
+        // Get parking details
+        const parkingDoc = querySnapshot.docs[0];
+        const parkingData = parkingDoc.data();
+        const parkingId = parkingDoc.id;
+
+        console.log(' Parking details:', {
+            entryTime: parkingData.entryTimestamp,
+            status: parkingData.status
+        });
+
+        // Calculate duration and fee
+        const entryTime = new Date(parkingData.entryTimestamp);
+        const exitTime = new Date(exitTimestamp);
+        const durationMs = exitTime - entryTime;
+
+        // Format duration
+        const hours = Math.floor(durationMs / 3600000);
+        const minutes = Math.floor((durationMs % 3600000) / 60000);
+        const formattedDuration = `${hours} hours, ${minutes} minutes`;
+
+        // Calculate fee ($2 per hour, minimum 1 hour)
+        const hourlyRate = 2;
+        const billableHours = Math.max(1, Math.ceil(durationMs / 3600000));
+        const parkingFee = billableHours * hourlyRate;
+
+        console.log('💰 Parking calculations:', {
+            duration: formattedDuration,
+            fee: parkingFee,
+            billableHours: billableHours
+        });
+
+        // Find the user with this license plate
+        console.log('🔍 Searching for user with license plate:', licensePlate);
+        const usersRef = db.collection('users');
+        const userSnapshot = await usersRef.where('licensePlates', 'array-contains', licensePlate).get();
+
+        if (!userSnapshot.empty) {
+            const userDoc = userSnapshot.docs[0];
+            const userData = userDoc.data();
+            console.log('✅ Found user:', userData.email);
+
+            if (userData.phoneNumber) {
+                console.log('📱 User phone number found:', userData.phoneNumber);
+                console.log('🔍 Checking Twilio configuration:');
+                console.log('   - TWILIO_ACCOUNT_SID:', process.env.TWILIO_ACCOUNT_SID ? 'Present' : 'Missing');
+                console.log('   - TWILIO_AUTH_TOKEN:', process.env.TWILIO_AUTH_TOKEN ? 'Present' : 'Missing');
+                console.log('   - TWILIO_PHONE_NUMBER:', process.env.TWILIO_PHONE_NUMBER ? process.env.TWILIO_PHONE_NUMBER : 'Missing');
+
+                // Send SMS notification
+                try {
+                    console.log(' Attempting to send SMS...');
+                    const smsSent = await sendParkingMessage(
+                        userData.phoneNumber,
+                        formattedDuration,
+                        parkingFee,
+                        customMessage
+                    );
+                    
+                    if (smsSent) {
+                        console.log('✅ SMS sent successfully');
+                    } else {
+                        console.log('❌ Failed to send SMS');
+                    }
+                } catch (smsError) {
+                    console.error('❌ Error sending SMS:', smsError);
+                    console.error('Error details:', {
+                        message: smsError.message,
+                        code: smsError.code,
+                        moreInfo: smsError.moreInfo
+                    });
+                }
+            } else {
+                console.log('⚠️ User has no phone number registered');
+            }
+        } else {
+            console.log('⚠️ No user found with license plate:', licensePlate);
+        }
+
+        // Update parking entry with exit information
+        console.log('📝 Updating parking entry...');
+        await parkingDoc.ref.update({
+            exitTimestamp: exitTimestamp,
+            status: 'pending_payment',
+            parkingDuration: formattedDuration,
+            parkingDurationMs: durationMs,
+            parkingFee: parkingFee,
+            hasPaid: false
+        });
+        console.log('✅ Parking entry updated');
+
+        // Prepare response
         const responseData = {
             success: true,
             licensePlate,
-            exitTimestamp: result.timestamp,
+            exitTimestamp,
             hasPaid: false,
-            imageUrl: result.imageUrl
+            imageUrl: result.imageUrl,
+            parkingFee,
+            parkingDuration: formattedDuration
         };
-        
+
         // Store the latest exit globally
         global.latestExit = responseData;
-        
-        console.log('📤 Sending exit response to frontend:', responseData);
+
+        console.log('📤 Sending response:', responseData);
         res.json(responseData);
         console.log('=== Exit Request Completed ===\n');
+
     } catch (error) {
-        console.error('❌ Error processing exit image:', error);
+        console.error('❌ Error processing exit:', error);
         console.error('Error stack:', error.stack);
-        res.status(500).json({ error: 'Failed to process exit image' });
+        console.error('Error details:', {
+            message: error.message,
+            code: error.code,
+            moreInfo: error.moreInfo
+        });
+        res.status(500).json({ error: 'Failed to process exit' });
     }
 });
 
@@ -352,10 +572,10 @@ app.listen(PORT, HOST, () => {
     console.log(`=== Server Started ===`);
     console.log(`🌐 Server running at http://${HOST}:${PORT}`);
     console.log(`📍 Local access: http://localhost:${PORT}`);
-    console.log(`📍 Network access (Location 1): http://192.168.90.27:${PORT}`);
+    console.log(`📍 Network access (Location 1): http://192.168.90.127:${PORT}`);
     console.log(`📍 Network access (Location 2): http://192.168.0.123:${PORT}`);
     console.log(`🔥 Test URLs:`);
-    console.log(`   Location 1: http://192.168.90.27:${PORT}/test-entry/TNAB43567`);
+    console.log(`   Location 1: http://192.168.90.127:${PORT}/test-entry/TNAB43567`);
     console.log(`   Location 2: http://192.168.0.123:${PORT}/test-entry/TNAB43567`);
     console.log(`===================`);
 }); 
