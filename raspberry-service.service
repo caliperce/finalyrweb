@@ -1,0 +1,12 @@
+[Unit]
+Description=Raspberry Pi Parking Service
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/node /home/pi/your-project-path/backend/raspberry-service.js
+WorkingDirectory=/home/pi/your-project-path
+Restart=always
+User=pi
+
+[Install]
+WantedBy=multi-user.target 

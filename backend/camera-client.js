@@ -97,7 +97,7 @@ async function captureAndSend(endpoint = 'upload/entry') {
 }
 
 // Function to start continuous capture mode
-async function startContinuousCapture(interval = 5000, endpoint = 'upload/entry') {
+async function startContinuousCapture(interval = 7000, endpoint = 'upload/entry') {
     console.log(`Starting continuous capture mode. Capturing every ${interval/1000} seconds...`);
     console.log('Will stop automatically once a license plate is detected');
     console.log('Press Ctrl+C to stop manually');
@@ -111,7 +111,7 @@ async function startContinuousCapture(interval = 5000, endpoint = 'upload/entry'
     // Check if we already detected a license plate in the first capture
     if (initialResult && initialResult.success && initialResult.licensePlate) {
         console.log('🎯 License plate detected on first try! Stopping capture process.');
-        return null; // No interval to return since we're done
+        return initialResult;
     }
     
     // If no license plate detected yet, set up the interval

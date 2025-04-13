@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - Parking Management</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/semantic-ui@2.4.2/dist/semantic.min.css">
+    <style>
+        body {
+            background: linear-gradient(135deg, #ff9966, #ff5e62, #6B48FF);
+            background-attachment: fixed;
+            padding: 20px;
+            min-height: 100vh;
+            color: #fff;
+        }
+        .ui.container {
+            margin-top: 2em;
+        }
+        .ui.segment {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+        }
+        .parking-card {
+            margin-bottom: 1em !important;
+            background: rgba(255, 255, 255, 0.15) !important;
+            backdrop-filter: blur(10px) !important;
+            border: 1px solid rgba(255, 255, 255, 0.2) !important;
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37) !important;
+            transition: transform 0.3s ease, box-shadow 0.3s ease !important;
+        }
+        .parking-card:hover {
+            transform: translateY(-5px) !important;
+            box-shadow: 0 12px 40px 0 rgba(31, 38, 135, 0.45) !important;
+        }
+        .image-preview {
+            max-width: 200px;
+            max-height: 150px;
+            margin: 10px 0;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+        .ui.header {
+            color: #fff !important;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+        }
+        .ui.card > .content > .header {
+            color: #fff !important;
+        }
+        .ui.card > .content > .meta,
+        .ui.card > .content > .description {
+            color: rgba(255, 255, 255, 0.85) !important;
+        }
+        .ui.card .meta *,
+        .ui.card .description * {
+            color: rgba(255, 255, 255, 0.85) !important;
+        }
+        .ui.search > .ui.input {
+            width: 100%;
+        }
+        .ui.input > input {
+            background: rgba(255, 255, 255, 0.1) !important;
+            border: 1px solid rgba(255, 255, 255, 0.2) !important;
+            color: #fff !important;
+        }
+        .ui.input > input::placeholder {
+            color: rgba(255, 255, 255, 0.6) !important;
+        }
+        .status.active {
+            color: #00ff9d !important;
+            font-weight: bold;
+        }
+        .status.pending_payment {
+            color: #ffd700 !important;
+            font-weight: bold;
+        }
+        .status.completed {
+            color: #87ceeb !important;
+            font-weight: bold;
+        }
+        .ui.button {
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            transition: all 0.3s ease;
+        }
+        .ui.basic.green.button {
+            color: #fff !important;
+            box-shadow: 0 0 0 1px #00ff9d inset !important;
+        }
+        .ui.basic.blue.button {
+            color: #fff !important;
+            box-shadow: 0 0 0 1px #87ceeb inset !important;
+        }
+        .ui.basic.green.button:hover {
+            background: rgba(0, 255, 157, 0.2) !important;
+        }
+        .ui.basic.blue.button:hover {
+            background: rgba(135, 206, 235, 0.2) !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="ui container">
+        <h1 class="ui header">Admin Dashboard</h1>
+        <div class="ui segment">
+            <h2 class="ui header">Parking Records</h2>
+            <div class="ui search">
+                <div class="ui icon input">
+                    <input class="prompt" type="text" placeholder="Search by license plate...">
+                    <i class="search icon"></i>
+                </div>
+                <div class="results"></div>
+            </div>
+        </div>
+        
+        <div id="parking-records" class="ui cards">
+            <!-- Parking records will be displayed here -->
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/semantic-ui@2.4.2/dist/semantic.min.js"></script>
+    <script type="module" src="admin-dashboard.js"></script>
+</body>
+</html> 

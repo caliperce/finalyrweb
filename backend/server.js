@@ -578,4 +578,29 @@ app.listen(PORT, HOST, () => {
     console.log(`   Location 1: http://192.168.90.127:${PORT}/test-entry/TNAB43567`);
     console.log(`   Location 2: http://192.168.0.123:${PORT}/test-entry/TNAB43567`);
     console.log(`===================`);
-}); 
+});
+
+// Function to fetch latest image URLs for a license plate
+async function fetchImageUrls(licensePlate) {
+    try {
+        // Fetch entry image URL
+        const entryResponse = await fetch(`${SERVER_URL}/latest-entry?licensePlate=${licensePlate}`);
+        const entryData = await entryResponse.json();
+        
+        // Fetch exit image URL
+        const exitResponse = await fetch(`${SERVER_URL}/latest-exit?licensePlate=${licensePlate}`);
+        const exitData = await exitResponse.json();
+
+        return {
+            entryImageUrl: entryData.data?.imageUrl || '',
+            exitImageUrl: exitData.data?.imageUrl || ''
+        };
+    } catch (error) {
+        console.error('Error fetching image URLs:', error);
+        return { entryImageUrl: '', exitImageUrl: '' };
+    }
+}
+
+module.exports = {
+    fetchImageUrls
+}
