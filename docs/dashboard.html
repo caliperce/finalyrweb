@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Dashboard - Parking Management</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/semantic-ui/2.4.1/semantic.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/semantic-ui/2.4.1/semantic.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            background: linear-gradient(to right, #f1f2b5, #135058);
+            background-size: 400% 400%;
+            animation: gradientBG 15s ease infinite;
+        }
+
+        @keyframes gradientBG {
+            0% {
+                background-position: 0% 50%;
+            }
+            50% {
+                background-position: 100% 50%;
+            }
+            100% {
+                background-position: 0% 50%;
+            }
+        }
+
+        .dashboard-container {
+            padding: 2rem;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .main-content {
+            background: rgba(255, 255, 255, 0.85);
+            border-radius: 20px;
+            box-shadow: 0 8px 32px rgba(19, 80, 88, 0.2);
+            backdrop-filter: blur(10px);
+            padding: 2rem;
+            margin: 1rem auto;
+            width: 90%;
+            max-width: 1400px;
+            flex-grow: 1;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .header-section {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid rgba(19, 80, 88, 0.2);
+        }
+
+        .welcome-text {
+            font-size: 2.2rem;
+            color: #135058;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.05);
+        }
+
+        .user-email {
+            font-size: 1.2rem;
+            color: #446d72;
+        }
+
+        .license-plates-section {
+            background: rgba(255, 255, 255, 0.5);
+            border-radius: 15px;
+            padding: 2rem;
+            margin: 2rem 0;
+            min-height: 400px;
+            box-shadow: 0 4px 15px rgba(19, 80, 88, 0.1);
+        }
+
+        .plate-list {
+            margin: 2rem 0;
+        }
+
+        .plate-item {
+            background: rgba(255, 255, 255, 0.8);
+            padding: 1.5rem;
+            border-radius: 12px;
+            margin-bottom: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 4px 15px rgba(19, 80, 88, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .plate-number {
+            font-size: 1.2rem;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            color: #135058;
+        }
+
+        .plate-number i {
+            margin-right: 1rem;
+            color: #135058;
+        }
+
+        .add-plate-section {
+            margin-top: 2rem;
+            padding: 2rem;
+            background: rgba(255, 255, 255, 0.5);
+            border-radius: 15px;
+            box-shadow: 0 4px 15px rgba(19, 80, 88, 0.1);
+        }
+
+        #add-license-form .field label {
+            color: #135058;
+            font-size: 1.2rem;
+            margin-bottom: 1rem;
+        }
+
+        #add-license-form input {
+            border: 2px solid rgba(19, 80, 88, 0.2) !important;
+            border-radius: 10px !important;
+            background: rgba(255, 255, 255, 0.9) !important;
+            padding: 12px 15px !important;
+        }
+
+        #add-license-form input:focus {
+            border-color: #135058 !important;
+            box-shadow: 0 2px 8px rgba(19, 80, 88, 0.1) !important;
+        }
+
+        .ui.primary.button {
+            background: #135058 !important;
+            border: none !important;
+            transition: all 0.3s ease !important;
+            color: white !important;
+            font-weight: 500 !important;
+        }
+
+        .ui.primary.button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(19, 80, 88, 0.4);
+            background: #0d3840 !important;
+        }
+
+        .ui.red.button {
+            background: #135058 !important;
+            border: none !important;
+            transition: all 0.3s ease !important;
+            color: white !important;
+            font-weight: 500 !important;
+        }
+
+        .ui.red.button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(19, 80, 88, 0.4);
+            background: #0d3840 !important;
+        }
+
+        .error-message {
+            background: rgba(255, 228, 228, 0.9) !important;
+            border: 1px solid #ffd5d5 !important;
+            color: #135058 !important;
+            border-radius: 12px !important;
+        }
+
+        .ui.header {
+            color: #135058 !important;
+        }
+
+        .ui.header .sub.header {
+            color: #446d72 !important;
+        }
+
+        .ui.header i.icon {
+            color: #135058 !important;
+        }
+
+        .logout-section {
+            margin-top: 2rem;
+            text-align: right;
+        }
+
+        .active-parking-item {
+            margin-bottom: 15px !important;
+            border-left: 4px solid #135058 !important;
+            background: rgba(255, 255, 255, 0.85) !important;
+        }
+        
+        .ui.statistic .value {
+            color: #135058 !important;
+            font-size: 2rem !important;
+            font-weight: bold !important;
+        }
+        
+        .ui.statistic .label {
+            color: #446d72 !important;
+        }
+        
+        .timer-container {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container">
+        <div class="main-content">
+            <div class="header-section">
+                <div>
+                    <h1 class="welcome-text">Welcome to Your Dashboard</h1>
+                    <div class="user-email" id="user-email"></div>
+                </div>
+                <div class="logout-section">
+                    <button class="ui red button" id="Logout">
+                        <i class="sign-out icon"></i>
+                        Logout
+                    </button>
+                </div>
+            </div>
+
+            <!-- Pending Payments Section - Only visible when needed -->
+            <div class="license-plates-section" id="pending-payments-section" style="display: none; border-left: 4px solid #f39c12; background: rgba(255, 228, 196, 0.3);">
+                <h2 class="ui header" style="color: #f39c12 !important;">
+                    <i class="exclamation triangle icon" style="color: #f39c12 !important;"></i>
+                    <div class="content">
+                        Pending Payments
+                        <div class="sub header">You have vehicles that require payment.</div>
+                    </div>
+                </h2>
+                
+                <div id="pending-payments-list">
+                    <!-- Pending payment entries will be displayed here -->
+                </div>
+            </div>
+
+            <div class="license-plates-section">
+                <h2 class="ui header">
+                    <i class="car icon"></i>
+                    <div class="content">
+                        Your License Plates
+                        <div class="sub header">Manage your registered vehicles</div>
+                    </div>
+                </h2>
+
+                <div class="plate-list" id="license-plate-list">
+                    <!-- License plates will be displayed here -->
+                </div>
+
+                <div class="add-plate-section">
+                    <div class="ui form" id="add-license-form">
+                        <div class="field">
+                            <label>Add License Plate</label>
+                            <div class="ui action input">
+                                <input type="text" id="new-license-plate" placeholder="Enter license plate number">
+                                <button class="ui primary button" id="add-license-btn">
+                                    <i class="plus icon"></i>
+                                    Add Plate
+                                </button>
+                            </div>
+                        </div>
+                        <div class="ui error message error-message" id="license-error"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Active Parking Section -->
+            <div class="license-plates-section">
+                <h2 class="ui header">
+                    <i class="clock icon"></i>
+                    <div class="content">
+                        Active Parking
+                        <div class="sub header">Your vehicles currently parked</div>
+                    </div>
+                </h2>
+                
+                <div id="active-parking-list">
+                    <!-- Active parking entries will be displayed here -->
+                    <div class="ui placeholder segment" id="no-active-parking">
+                        <div class="ui icon header">
+                            <i class="car icon"></i>
+                            No active parking found
+                        </div>
+                        <div class="ui horizontal divider">OR</div>
+                        <p>Wait for your vehicle to be detected at the parking entrance</p>
+                    </div>
+                    
+                    <!-- Loading indicator -->
+                    <div class="ui segment" id="parking-loading" style="display: none;">
+                        <div class="ui active dimmer">
+                            <div class="ui text loader">Checking Firebase for active parking entries...</div>
+                        </div>
+                        <p></p>
+                    </div>
+                    
+                    <!-- Error message -->
+                    <div class="ui negative message" id="parking-error" style="display: none;">
+                        <div class="header">Error loading parking data</div>
+                        <p id="parking-error-message">Unable to load parking data from Firebase.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Payment QR Code Modal -->
+    <div class="ui modal" id="payment-modal">
+        <i class="close icon"></i>
+        <div class="header">
+            <i class="credit card icon"></i> Complete Payment
+        </div>
+        <div class="content">
+            <div class="ui center aligned grid">
+                <div class="column">
+                    <h3>Scan this QR code to pay</h3>
+                    <img src="WhatsApp Image 2025-02-23 at 5.20.09 PM.jpeg" class="ui centered medium image" alt="Payment QR Code">
+                    <p style="margin-top: 20px;">After scanning and completing the payment, click the button below</p>
+                </div>
+            </div>
+        </div>
+        <div class="actions">
+            <div class="ui labeled icon primary button" id="mark-as-paid-button">
+                <i class="check icon"></i>
+                Mark as Paid
+            </div>
+            <div class="ui labeled icon button" id="cancel-payment-button">
+                <i class="cancel icon"></i>
+                Cancel
+            </div>
+        </div>
+    </div>
+
+    <!-- Phone Number Collection Modal -->
+    <div class="ui modal" id="phone-number-modal">
+        <i class="close icon"></i>
+        <div class="header">
+            <i class="phone icon"></i> Add Your Phone Number
+        </div>
+        <div class="content">
+            <div class="ui form">
+                <div class="field">
+                    <label>Phone Number</label>
+                    <div class="ui left icon input">
+                        <i class="phone icon"></i>
+                        <input type="tel" id="phone-number-input" placeholder="Enter your phone number with country code (e.g., +919962973049)">
+                    </div>
+                </div>
+                <div class="ui error message" id="phone-error"></div>
+            </div>
+        </div>
+        <div class="actions">
+            <div class="ui primary button" id="save-phone-btn">
+                <i class="save icon"></i>
+                Save Phone Number
+            </div>
+        </div>
+    </div>
+
+    <script src="firebase.js" type="module"></script>
+    <script src="dashboard.js" type="module"></script>
+</body>
+</html> 
