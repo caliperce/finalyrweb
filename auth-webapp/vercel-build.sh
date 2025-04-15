@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Create public directory if it doesn't exist
+mkdir -p ./public
+
 # Create env-config.js
 echo "window.ENV = {" > ./public/env-config.js
 echo "  FIREBASE_API_KEY: '$FIREBASE_API_KEY'," >> ./public/env-config.js
@@ -9,4 +12,7 @@ echo "  FIREBASE_STORAGE_BUCKET: '$FIREBASE_STORAGE_BUCKET'," >> ./public/env-co
 echo "  FIREBASE_MESSAGING_SENDER_ID: '$FIREBASE_MESSAGING_SENDER_ID'," >> ./public/env-config.js
 echo "  FIREBASE_APP_ID: '$FIREBASE_APP_ID'," >> ./public/env-config.js
 echo "  FIREBASE_MEASUREMENT_ID: '$FIREBASE_MEASUREMENT_ID'" >> ./public/env-config.js
-echo "};" >> ./public/env-config.js 
+echo "};" >> ./public/env-config.js
+
+# Make the file readable
+chmod 644 ./public/env-config.js 
