@@ -1,0 +1,12 @@
+{
+  "name": "auth-webapp",
+  "version": "1.0.0",
+  "description": "Authentication Web Application",
+  "main": "index.js",
+  "scripts": {
+    "start": "node app.js"
+  },
+  "dependencies": {
+    "firebase": "^11.3.0"
+  }
+} 

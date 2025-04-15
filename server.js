@@ -8,6 +8,9 @@ app.use(express.static(path.join(__dirname, 'auth-webapp')));
 // Start the server
 const PORT = 3000;
 app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server is running on http://192.168.90.127:${PORT}`);
-    console.log('You can access the payment page at: http://192.168.90.127:3000/index.html');
+    console.log('\n=== Frontend Server Started ===');
+    console.log(`Local access: http://localhost:${PORT}`);
+    console.log(`College access: http://192.168.90.127:${PORT}`);
+    console.log(`Home access: http://192.168.0.123:${PORT}`);
+    console.log('===================\n');
 }); 

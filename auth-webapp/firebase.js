@@ -13,13 +13,13 @@ import { getAuth } from "https://www.gstatic.com/firebasejs/11.3.0/firebase-auth
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
-    apiKey: "AIzaSyB-WA4jjwIiy3BoabtKTNC2LYJfweibqI4",
-    authDomain: "userinfo-10027.firebaseapp.com",
-    projectId: "userinfo-10027",
-    storageBucket: "userinfo-10027.firebasestorage.app",
-    messagingSenderId: "605892604762",
-    appId: "1:605892604762:web:e4e6f1231f144e2e983963",
-    measurementId: "G-HVK6HKR639"
+    apiKey: process.env.FIREBASE_API_KEY,
+    authDomain: process.env.FIREBASE_AUTH_DOMAIN,
+    projectId: process.env.FIREBASE_PROJECT_ID,
+    storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
+    appId: process.env.FIREBASE_APP_ID,
+    measurementId: process.env.FIREBASE_MEASUREMENT_ID
 };
 
 // Initialize Firebase

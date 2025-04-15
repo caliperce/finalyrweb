@@ -23,9 +23,13 @@ const HOST = '0.0.0.0';
 
 // Middleware
 app.use(cors({
-    origin: '*',  // Allow all origins
-    methods: ['GET', 'POST'],  // Allow GET and POST methods
-    allowedHeaders: ['Content-Type']  // Allow Content-Type header
+    origin: [
+        'http://localhost:3000',
+        'http://192.168.90.127:3000',  // College
+        'http://192.168.0.123:3000'    // Home
+    ],
+    methods: ['GET', 'POST'],
+    allowedHeaders: ['Content-Type']
 }));
 
 // Add cache prevention middleware
@@ -569,15 +573,14 @@ app.use((err, req, res, next) => {
 
 // Start the server
 app.listen(PORT, HOST, () => {
-    console.log(`=== Server Started ===`);
-    console.log(`🌐 Server running at http://${HOST}:${PORT}`);
+    console.log(`\n=== Backend Server Started ===`);
     console.log(`📍 Local access: http://localhost:${PORT}`);
-    console.log(`📍 Network access (Location 1): http://192.168.90.127:${PORT}`);
-    console.log(`📍 Network access (Location 2): http://192.168.0.123:${PORT}`);
-    console.log(`🔥 Test URLs:`);
-    console.log(`   Location 1: http://192.168.90.127:${PORT}/test-entry/TNAB43567`);
-    console.log(`   Location 2: http://192.168.0.123:${PORT}/test-entry/TNAB43567`);
-    console.log(`===================`);
+    console.log(`📍 College access: http://192.168.90.127:${PORT}`);
+    console.log(`📍 Home access: http://192.168.0.123:${PORT}`);
+    console.log(`\n🔥 Test URLs:`);
+    console.log(`   College Test Entry: http://192.168.90.127:${PORT}/test-entry/TNAB43567`);
+    console.log(`   Home Test Entry: http://192.168.0.123:${PORT}/test-entry/TNAB43567`);
+    console.log(`===================\n`);
 });
 
 // Function to fetch latest image URLs for a license plate
