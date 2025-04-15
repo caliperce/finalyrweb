@@ -4,103 +4,34 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Parking Management System</title>
-    <!-- Add Firebase SDK -->
-    <script src="https://www.gstatic.com/firebasejs/9.x.x/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.x.x/firebase-auth.js"></script>
-    <!-- Environment variables -->
+    <!-- Environment variables - This must come BEFORE Firebase scripts -->
     <script src="/public/env-config.js"></script>
-    <!-- Add direct handleSignup function -->
-    <script>
-        console.log("HTML LOADED - SCRIPT TAG RUNNING");
+    <!-- Firebase SDK - Using specific version -->
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js';
+        import { getAuth } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js';
+        import { getFirestore } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js';
         
-        // Global function that will be called directly from the button
-        async function handleSignup(event) {
-            event.preventDefault();
-            console.log("SIGNUP BUTTON CLICKED FROM DIRECT HTML ONCLICK");
-            
-            // Get form elements
-            const email = document.getElementById("email");
-            const password = document.getElementById("password");
-            const license = document.getElementById("license");
-            const errorElement = document.getElementById("error");
-            const successMessage = document.getElementById('successMessage');
-            
-            // Clear any error messages
-            if (errorElement) {
-                errorElement.innerHTML = "";
-                errorElement.classList.remove("visible");
-            }
-            
-            // Basic form validation
-            if (!email || !email.value || !password || !password.value || !license || !license.value) {
-                console.log("Missing required fields");
-                if (errorElement) {
-                    errorElement.innerHTML = "All fields are required";
-                    errorElement.classList.add("visible");
-                }
-                return;
-            }
-            
-            // Get form values
-            const userEmail = email.value.trim();
-            const userPassword = password.value;
-            const userLicense = license.value.trim().toUpperCase();
-            
-            console.log("Form data:", { email: userEmail, license: userLicense });
-            
-            try {
-                // Import necessary functions from firebase modules
-                console.log("Importing Firebase modules...");
-                const { getAuth, createUserWithEmailAndPassword } = await import("https://www.gstatic.com/firebasejs/11.3.0/firebase-auth.js");
-                const { getFirestore, doc, setDoc } = await import("https://www.gstatic.com/firebasejs/11.3.0/firebase-firestore.js");
-                const { db, auth } = await import("./firebase.js");
-                
-                console.log("Firebase modules imported successfully");
-                
-                // Create authentication user
-                console.log("Creating authentication user...");
-                const userCredential = await createUserWithEmailAndPassword(auth, userEmail, userPassword);
-                const user = userCredential.user;
-                console.log("Auth user created successfully:", user.uid);
-                
-                // Prepare user data
-                const userData = {
-                    createdAt: new Date().toISOString(),
-                    email: userEmail,
-                    licensePlates: [userLicense],
-                    uid: user.uid
-                };
-                
-                console.log("User data prepared:", userData);
-                
-                // Write to Firestore
-                console.log("Writing to Firestore...");
-                const userRef = doc(db, "users", user.uid);
-                await setDoc(userRef, userData);
-                console.log("Document created successfully!");
-                
-                // Show success message
-                if (successMessage) {
-                    successMessage.style.display = 'block';
-                    successMessage.innerHTML = "Account created successfully! Redirecting...";
-                }
-                
-                // Redirect
-                console.log("Redirecting to dashboard...");
-                setTimeout(() => {
-                    window.location.href = "dashboard.html";
-                }, 2000);
-            } catch (error) {
-                console.error("ERROR:", error);
-                console.error("Code:", error.code);
-                console.error("Message:", error.message);
-                
-                if (errorElement) {
-                    errorElement.innerHTML = error.message || "An error occurred during signup";
-                    errorElement.classList.add("visible");
-                }
-            }
-        }
+        // Your Firebase configuration from env-config.js
+        const firebaseConfig = {
+            apiKey: window.ENV.FIREBASE_API_KEY,
+            authDomain: window.ENV.FIREBASE_AUTH_DOMAIN,
+            projectId: window.ENV.FIREBASE_PROJECT_ID,
+            storageBucket: window.ENV.FIREBASE_STORAGE_BUCKET,
+            messagingSenderId: window.ENV.FIREBASE_MESSAGING_SENDER_ID,
+            appId: window.ENV.FIREBASE_APP_ID,
+            measurementId: window.ENV.FIREBASE_MEASUREMENT_ID
+        };
+        
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        
+        // Make Firebase instances available globally
+        window.firebaseApp = app;
+        window.firebaseAuth = auth;
+        window.firebaseDB = db;
     </script>
     <!-- Make sure jQuery comes BEFORE Semantic UI -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
