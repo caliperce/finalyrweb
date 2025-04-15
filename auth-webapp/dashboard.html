@@ -4,6 +4,38 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>User Dashboard - Parking Management</title>
+
+    <!-- Environment variables - Must come BEFORE Firebase -->
+    <script src="/public/env-config.js"></script>
+
+    <!-- Firebase App (the core Firebase SDK) with COMPAT version -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+
+    <!-- Initialize Firebase -->
+    <script>
+        console.log('Initializing Firebase in dashboard...');
+        try {
+            const firebaseConfig = {
+                apiKey: window.ENV.FIREBASE_API_KEY,
+                authDomain: window.ENV.FIREBASE_AUTH_DOMAIN,
+                projectId: window.ENV.FIREBASE_PROJECT_ID,
+                storageBucket: window.ENV.FIREBASE_STORAGE_BUCKET,
+                messagingSenderId: window.ENV.FIREBASE_MESSAGING_SENDER_ID,
+                appId: window.ENV.FIREBASE_APP_ID,
+                measurementId: window.ENV.FIREBASE_MEASUREMENT_ID
+            };
+            console.log('Firebase config:', firebaseConfig);
+            
+            // Initialize Firebase
+            firebase.initializeApp(firebaseConfig);
+            console.log('Firebase initialized successfully in dashboard!');
+        } catch (error) {
+            console.error('Error initializing Firebase:', error);
+        }
+    </script>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/semantic-ui/2.4.1/semantic.min.css" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/semantic-ui/2.4.1/semantic.min.js"></script>
@@ -373,7 +405,6 @@
         </div>
     </div>
 
-    <script src="firebase.js" type="module"></script>
     <script src="dashboard.js" type="module"></script>
     <script type="module">
         import config from './config.js';

@@ -1,6 +1,6 @@
-import { auth, db } from './firebase.js';
-import { doc, getDoc, updateDoc, setDoc, collection, query, where, getDocs, addDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.3.0/firebase-firestore.js";
-import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.3.0/firebase-auth.js";
+// Get Firebase instances from the global scope
+const auth = firebase.auth();
+const db = firebase.firestore();
 
 // Server Configuration
 const SERVER_CONFIG = {
@@ -15,6 +15,8 @@ const SERVER_URL = SERVER_CONFIG.LOCATION_1; // Change to LOCATION_2 when needed
 console.log('🌐 Using server URL:', SERVER_URL);
 
 document.addEventListener('DOMContentLoaded', () => {
+    console.log('Dashboard loaded, checking auth state...');
+    
     // Get DOM elements
     const userEmailElement = document.getElementById('user-email');
     const licensePlateList = document.getElementById('license-plate-list');
@@ -77,40 +79,45 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     
     // Check authentication state
-    onAuthStateChanged(auth, async (user) => {
+    auth.onAuthStateChanged(async (user) => {
+        console.log('Auth state changed:', user?.email);
+        
         if (!user) {
-            // Only redirect if we're actually on the dashboard page
-            if (window.location.pathname.includes('dashboard.html')) {
-                window.location.replace('index.html');
-            }
+            console.log('No user found, redirecting to login...');
+            window.location.replace('index.html');
             return;
         }
 
         // Display user email
-        userEmailElement.textContent = user.email;
-        
-        // Check for phone number and show modal if needed
-        await checkAndCollectPhoneNumber(user);
-        
-        // Load license plates
-        await loadLicensePlates();
-        
-        // Set up the entry and exit parking listeners
-        setupParkingListener();
-        setupExitListener();
-        
-        // Start monitoring active parking entries
-        setupActiveParkingMonitor();
+        if (userEmailElement) {
+            userEmailElement.textContent = user.email;
+            console.log('Updated user email display');
+        }
+
+        // Load user data
+        try {
+            const userDoc = await db.collection('users').doc(user.uid).get();
+            if (userDoc.exists) {
+                const userData = userDoc.data();
+                console.log('User data loaded:', userData);
+                // Update UI with user data
+                updateUI(userData);
+            } else {
+                console.log('No user document found');
+            }
+        } catch (error) {
+            console.error('Error loading user data:', error);
+        }
     });
 
     // Function to check and collect phone number
     async function checkAndCollectPhoneNumber(user) {
         try {
             // Get user document
-            const userDocRef = doc(db, 'users', user.uid);
-            const userDoc = await getDoc(userDocRef);
+            const userDocRef = db.collection('users').doc(user.uid);
+            const userDoc = await userDocRef.get();
             
-            if (!userDoc.exists()) {
+            if (!userDoc.exists) {
                 console.error("User document not found");
                 return;
             }
@@ -144,7 +151,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     
                     try {
                         // Update user document with phone number
-                        await updateDoc(userDocRef, {
+                        await userDocRef.update({
                             phoneNumber: phoneNumber
                         });
                         
@@ -173,15 +180,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             // Get user document reference
-            const userDocRef = doc(db, 'users', user.uid);
-            const userDoc = await getDoc(userDocRef);
+            const userDocRef = db.collection('users').doc(user.uid);
+            const userDoc = await userDocRef.get();
             
             // If the user document doesn't exist, create it
-            if (!userDoc.exists()) {
+            if (!userDoc.exists) {
                 console.log("User document doesn't exist, creating it now...");
                 try {
                     // Create a new user document
-                    await setDoc(userDocRef, {
+                    await userDocRef.set({
                         email: user.email,
                         licensePlates: [],
                         createdAt: new Date().toISOString(),
@@ -190,7 +197,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     console.log("Successfully created new user document");
                     
                     // Reload the document after creating it
-                    const refreshedDoc = await getDoc(userDocRef);
+                    const refreshedDoc = await userDocRef.get();
                     var licensePlates = refreshedDoc.data()?.licensePlates || [];
                 } catch (error) {
                     console.error("Error creating user document:", error);
@@ -246,11 +253,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             // Get the user document reference
-            const userDocRef = doc(db, 'users', user.uid);
-            const userDoc = await getDoc(userDocRef);
+            const userDocRef = db.collection('users').doc(user.uid);
+            const userDoc = await userDocRef.get();
             
             // Check if user document exists, create it if not
-            if (!userDoc.exists()) {
+            if (!userDoc.exists) {
                 console.log("User document doesn't exist when adding license plate, creating it now...");
                 try {
                     // Import setDoc dynamically
@@ -291,7 +298,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const newPlates = [...currentPlates, plate];
-            await updateDoc(userDocRef, {
+            await userDocRef.update({
                 licensePlates: newPlates
             });
 
@@ -311,11 +318,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!user) return;
 
         try {
-            const userDoc = await getDoc(doc(db, 'users', user.uid));
+            const userDoc = await db.collection('users').doc(user.uid).get();
             const currentPlates = userDoc.data()?.licensePlates || [];
             
             const newPlates = currentPlates.filter((_, i) => i !== index);
-            await updateDoc(doc(db, 'users', user.uid), {
+            await userDoc.ref.update({
                 licensePlates: newPlates
             });
 
@@ -355,7 +362,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // First navigate to index.html
             window.location.href = 'index.html';
             // Then sign out
-            await signOut(auth);
+            await auth.signOut();
         } catch (error) {
             console.error('Error signing out:', error);
         }
@@ -373,7 +380,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Get all user's license plates
         const loadUserLicensePlates = async () => {
-            const userDoc = await getDoc(doc(db, 'users', user.uid));
+            const userDoc = await db.collection('users').doc(user.uid).get();
             return userDoc.data()?.licensePlates || [];
         };
         
@@ -393,14 +400,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.log('Monitoring active parking for license plates:', licensePlates);
                 
                 // Create a query for all user's parking entries (active, pending payment, and completed)
-                const activeParkingRef = collection(db, 'active_parking');
-                const q = query(
-                    activeParkingRef,
-                    where('licensePlate', 'in', licensePlates)
-                );
+                const activeParkingRef = db.collection('active_parking');
+                const q = db.collection('active_parking').where('licensePlate', 'in', licensePlates);
                 
                 // Set up real-time listener
-                return onSnapshot(q, (snapshot) => {
+                return db.collection('active_parking').onSnapshot(snapshot => {
                     hideParkingLoadingState();
                     console.log(`Active parking snapshot received: ${snapshot.docs.length} entries`);
                     
@@ -839,9 +843,9 @@ async function checkLicensePlate(licensePlate) {
     try {
         console.log('🔍 Checking license plate in users collection:', licensePlate);
         // Query the users collection for the license plate
-        const usersRef = collection(db, 'users');
-        const q = query(usersRef, where('licensePlates', 'array-contains', licensePlate));
-        const querySnapshot = await getDocs(q);
+        const usersRef = db.collection('users');
+        const q = usersRef.where('licensePlates', 'array-contains', licensePlate);
+        const querySnapshot = await q.get();
         
         const exists = !querySnapshot.empty;
         console.log('License plate exists:', exists);
@@ -878,14 +882,10 @@ async function createActiveParkingEntry(licensePlate, timestamp) {
         }
         
         // Check if entry already exists for this license plate
-        const activeParkingRef = collection(db, 'active_parking');
-        const q = query(
-            activeParkingRef, 
-            where('licensePlate', '==', licensePlate),
-            where('status', '==', 'active')
-        );
+        const activeParkingRef = db.collection('active_parking');
+        const q = activeParkingRef.where('licensePlate', '==', licensePlate).where('status', '==', 'active');
         
-        const existingEntries = await getDocs(q);
+        const existingEntries = await q.get();
         if (!existingEntries.empty) {
             console.log('⚠️ Active entry already exists for license plate:', licensePlate);
             // No need to create duplicate, this is not an error
@@ -901,7 +901,7 @@ async function createActiveParkingEntry(licensePlate, timestamp) {
             createdAt: new Date().toISOString()
         };
         
-        const docRef = await addDoc(activeParkingRef, newParkingDoc);
+        const docRef = await activeParkingRef.add(newParkingDoc);
         console.log('✅ Created new active parking entry with ID:', docRef.id);
         
         // Show success notification
@@ -1109,14 +1109,10 @@ async function handleVehicleExit(licensePlate, exitTimestamp) {
         console.log('🚗 Processing vehicle exit:', { licensePlate, exitTimestamp });
         
         // Find active parking entry for this license plate
-        const activeParkingRef = collection(db, 'active_parking');
-        const q = query(
-            activeParkingRef,
-            where('licensePlate', '==', licensePlate),
-            where('status', '==', 'active')
-        );
+        const activeParkingRef = db.collection('active_parking');
+        const q = activeParkingRef.where('licensePlate', '==', licensePlate).where('status', '==', 'active');
         
-        const querySnapshot = await getDocs(q);
+        const querySnapshot = await q.get();
         
         if (querySnapshot.empty) {
             console.log('❌ No active parking found for license plate:', licensePlate);
@@ -1147,7 +1143,7 @@ async function handleVehicleExit(licensePlate, exitTimestamp) {
         const billableHours = Math.max(1, Math.ceil(durationMs / 3600000));
         const parkingFee = billableHours * hourlyRate;
         
-        await updateDoc(doc(db, 'active_parking', parkingId), {
+        await db.collection('active_parking').doc(parkingId).update({
             exitTimestamp: exitTimestamp,
             hasPaid: false,
             status: 'pending_payment',
@@ -1175,7 +1171,7 @@ async function processPayment(parkingId) {
         // In a real application, this would connect to a payment gateway
         // For this demo, we'll just update the document
         
-        await updateDoc(doc(db, 'active_parking', parkingId), {
+        await db.collection('active_parking').doc(parkingId).update({
             hasPaid: true,
             status: 'completed',
             paymentTimestamp: new Date().toISOString()
