@@ -2,11 +2,12 @@
   "name": "auth-webapp",
   "version": "1.0.0",
   "description": "Authentication Web Application",
-  "main": "index.js",
   "scripts": {
-    "start": "node app.js"
+    "build": "./vercel-build.sh",
+    "start": "node index.js"
   },
   "dependencies": {
-    "firebase": "^11.3.0"
+    "dotenv": "^16.0.0",
+    "firebase": "^9.22.0"
   }
 } 
