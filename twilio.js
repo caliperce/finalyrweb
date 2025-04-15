@@ -22,7 +22,7 @@ async function sendParkingMessage(phoneNumber, duration, fee, customMessage = nu
 
         // Format the message
         const messageBody = customMessage || 
-            `The total time duration you've parked is: ${duration} and you've to pay an amount of $${fee.toFixed(2)}. Visit this link to pay the parking fee: http://192.168.90.127:3000/auth-webapp/index.html`;
+            `The total time duration you've parked is: ${duration} and you've to pay an amount of $${fee.toFixed(2)}. Visit this link to pay the parking fee: https://finalyrwebproject.vercel.app`;
 
         // Send the message
         const message = await client.messages.create({
