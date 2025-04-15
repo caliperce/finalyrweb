@@ -37,9 +37,9 @@ const firebaseConfig = {
     measurementId: window.ENV.FIREBASE_MEASUREMENT_ID
 };
 
-// Initialize Firebase using the new modular syntax
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js';
-const app = initializeApp(firebaseConfig);
+// Initialize Firebase (using compat version)
+if (!firebase.apps.length) {
+    firebase.initializeApp(firebaseConfig);
+}
 
-export default config;
-export { app }; 
+export default config; 
