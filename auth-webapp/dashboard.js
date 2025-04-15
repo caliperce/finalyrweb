@@ -78,6 +78,321 @@ document.addEventListener('DOMContentLoaded', () => {
         currentPaymentParkingId = null;
     });
     
+    // Function to update UI with user data
+    async function updateUI(userData) {
+        console.log('Updating UI with user data:', userData);
+        
+        // Display phone number if available
+        if (userData.phoneNumber) {
+            console.log('User phone number:', userData.phoneNumber);
+        } else {
+            console.log('No phone number found, will prompt user to add one');
+            // Show phone number collection modal
+            $('#phone-number-modal').modal({
+                closable: false,
+                onDeny: function() {
+                    return false;
+                }
+            }).modal('show');
+        }
+        
+        // Clear existing license plate list
+        if (licensePlateList) {
+            licensePlateList.innerHTML = '';
+        }
+
+        // Display license plates
+        if (userData.licensePlates && Array.isArray(userData.licensePlates)) {
+            userData.licensePlates.forEach((plate, index) => {
+                const plateElement = document.createElement('div');
+                plateElement.className = 'plate-item';
+                plateElement.innerHTML = `
+                    <div class="plate-number">
+                        <i class="car icon"></i>
+                        ${plate}
+                    </div>
+                    <button class="ui red icon button delete-plate" data-index="${index}">
+                        <i class="trash icon"></i>
+                    </button>
+                `;
+                licensePlateList.appendChild(plateElement);
+            });
+
+            // Add delete button event listeners
+            document.querySelectorAll('.delete-plate').forEach(button => {
+                button.addEventListener('click', () => deleteLicensePlate(parseInt(button.dataset.index)));
+            });
+
+            // Update add button state
+            if (addLicenseBtn) {
+                addLicenseBtn.disabled = userData.licensePlates.length >= 3;
+                if (userData.licensePlates.length >= 3) {
+                    addLicenseBtn.classList.add('disabled');
+                } else {
+                    addLicenseBtn.classList.remove('disabled');
+                }
+            }
+
+            // Check for active parking sessions
+            checkActiveParkingSessions(userData.licensePlates);
+        }
+    }
+
+    // Function to check and display active parking sessions
+    async function checkActiveParkingSessions(licensePlates) {
+        if (!licensePlates || !Array.isArray(licensePlates) || licensePlates.length === 0) {
+            if (noActiveParkingElement) {
+                noActiveParkingElement.style.display = 'block';
+            }
+            return;
+        }
+
+        try {
+            if (parkingLoadingElement) {
+                parkingLoadingElement.style.display = 'block';
+            }
+            if (noActiveParkingElement) {
+                noActiveParkingElement.style.display = 'none';
+            }
+
+            // Query active_parking collection for any active sessions
+            const activeParkingRef = db.collection('active_parking');
+            const query = activeParkingRef.where('licensePlate', 'in', licensePlates);
+            
+            // Set up real-time listener for active parking
+            query.onSnapshot((snapshot) => {
+                console.log('Active parking snapshot received:', snapshot.size, 'entries');
+                
+                if (snapshot.empty) {
+                    if (noActiveParkingElement) {
+                        noActiveParkingElement.style.display = 'block';
+                    }
+                    if (activeParkingList) {
+                        activeParkingList.innerHTML = '';
+                        activeParkingList.appendChild(noActiveParkingElement);
+                    }
+                    if (pendingPaymentsSection) {
+                        pendingPaymentsSection.style.display = 'none';
+                    }
+                    return;
+                }
+
+                // Process active parking entries
+                const activeEntries = [];
+                const pendingPayments = [];
+
+                snapshot.forEach((doc) => {
+                    const parkingData = doc.data();
+                    if (parkingData.status === 'active') {
+                        activeEntries.push({ id: doc.id, ...parkingData });
+                    } else if (parkingData.status === 'pending_payment') {
+                        pendingPayments.push({ id: doc.id, ...parkingData });
+                    }
+                });
+
+                // Update UI with active parking entries
+                if (activeParkingList) {
+                    displayActiveParkingEntries(activeEntries);
+                }
+
+                // Update UI with pending payments
+                if (pendingPaymentsSection && pendingPayments.length > 0) {
+                    displayPendingPayments(pendingPayments);
+                }
+            }, (error) => {
+                console.error('Error monitoring active parking:', error);
+                if (parkingErrorElement) {
+                    parkingErrorElement.style.display = 'block';
+                    parkingErrorElement.textContent = `Error loading parking data: ${error.message}`;
+                }
+            });
+
+        } catch (error) {
+            console.error('Error checking active parking sessions:', error);
+            if (parkingErrorElement) {
+                parkingErrorElement.style.display = 'block';
+                parkingErrorElement.textContent = `Error: ${error.message}`;
+            }
+        } finally {
+            if (parkingLoadingElement) {
+                parkingLoadingElement.style.display = 'none';
+            }
+        }
+    }
+
+    // Function to display active parking entries
+    function displayActiveParkingEntries(entries) {
+        if (!activeParkingList) return;
+        
+        activeParkingList.innerHTML = '';
+        
+        entries.forEach(entry => {
+            const entryTime = new Date(entry.entryTimestamp);
+            const formattedTime = entryTime.toLocaleString();
+            
+            const entryElement = document.createElement('div');
+            entryElement.className = 'ui segment active-parking-item';
+            entryElement.innerHTML = `
+                <div class="ui ribbon label" style="background-color: #27ae60; color: white;">
+                    <i class="check circle icon"></i> Active
+                </div>
+                <div class="ui grid" style="margin-top: 1.5rem;">
+                    <div class="twelve wide column">
+                        <h3 class="ui header">
+                            <i class="car icon"></i>
+                            <div class="content">
+                                ${entry.licensePlate}
+                                <div class="sub header">Entry Time: ${formattedTime}</div>
+                                <div class="sub header">Status: Active</div>
+                            </div>
+                        </h3>
+                    </div>
+                    <div class="four wide column">
+                        <div class="ui statistic">
+                            <div class="value" id="timer-${entry.id}">Calculating...</div>
+                            <div class="label">Duration</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            activeParkingList.appendChild(entryElement);
+            
+            // Start timer for this entry
+            startTimer(entry.id, entryTime);
+        });
+    }
+
+    // Function to display pending payments
+    function displayPendingPayments(payments) {
+        if (!pendingPaymentsSection) return;
+        
+        pendingPaymentsSection.style.display = 'block';
+        const pendingPaymentsList = document.getElementById('pending-payments-list');
+        if (!pendingPaymentsList) return;
+        
+        pendingPaymentsList.innerHTML = '';
+        
+        payments.forEach(payment => {
+            const exitTime = new Date(payment.exitTimestamp);
+            const formattedExitTime = exitTime.toLocaleString();
+            
+            const paymentElement = document.createElement('div');
+            paymentElement.className = 'ui segment';
+            paymentElement.style.borderLeft = '4px solid #f39c12';
+            paymentElement.innerHTML = `
+                <div class="ui grid">
+                    <div class="ten wide column">
+                        <div class="ui orange text" style="font-weight: bold;">${payment.licensePlate}</div>
+                        <div>Exit Time: ${formattedExitTime}</div>
+                        <div>Duration: ${payment.parkingDuration || 'Calculating...'}</div>
+                        <div>Fee: $${(payment.parkingFee || 0).toFixed(2)}</div>
+                    </div>
+                    <div class="six wide column" style="display: flex; align-items: center; justify-content: flex-end;">
+                        <button class="ui orange button pay-button" data-id="${payment.id}">
+                            <i class="credit card icon"></i>
+                            Pay Now
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            pendingPaymentsList.appendChild(paymentElement);
+            
+            // Add payment button event listener
+            const payButton = paymentElement.querySelector('.pay-button');
+            if (payButton) {
+                payButton.addEventListener('click', () => {
+                    // Store the payment ID
+                    window.currentPaymentParkingId = payment.id;
+                    // Show payment modal
+                    $('#payment-modal').modal('show');
+                });
+            }
+        });
+    }
+
+    // Function to add license plate
+    async function addLicensePlate(plate) {
+        try {
+            const user = auth.currentUser;
+            if (!user) return;
+
+            const userRef = db.collection('users').doc(user.uid);
+            const userDoc = await userRef.get();
+            
+            if (!userDoc.exists) {
+                // Create new user document
+                await userRef.set({
+                    email: user.email,
+                    licensePlates: [plate],
+                    createdAt: new Date().toISOString(),
+                    uid: user.uid
+                });
+                console.log('Created new user document with license plate');
+            } else {
+                // Update existing document
+                const currentPlates = userDoc.data().licensePlates || [];
+                if (currentPlates.length >= 3) {
+                    throw new Error('Maximum number of license plates (3) reached');
+                }
+                if (currentPlates.includes(plate)) {
+                    throw new Error('This license plate is already registered');
+                }
+                await userRef.update({
+                    licensePlates: [...currentPlates, plate]
+                });
+            }
+
+            // Refresh UI
+            const updatedDoc = await userRef.get();
+            updateUI(updatedDoc.data());
+            
+            // Clear input
+            if (newLicensePlateInput) {
+                newLicensePlateInput.value = '';
+            }
+            
+            // Hide error
+            if (licenseError) {
+                licenseError.style.display = 'none';
+            }
+        } catch (error) {
+            console.error('Error adding license plate:', error);
+            if (licenseError) {
+                licenseError.textContent = error.message;
+                licenseError.style.display = 'block';
+            }
+        }
+    }
+
+    // Function to delete license plate
+    async function deleteLicensePlate(index) {
+        try {
+            const user = auth.currentUser;
+            if (!user) return;
+
+            const userRef = db.collection('users').doc(user.uid);
+            const userDoc = await userRef.get();
+            const currentPlates = userDoc.data().licensePlates || [];
+            
+            const newPlates = currentPlates.filter((_, i) => i !== index);
+            await userRef.update({
+                licensePlates: newPlates
+            });
+
+            // Refresh UI
+            const updatedDoc = await userRef.get();
+            updateUI(updatedDoc.data());
+        } catch (error) {
+            console.error('Error deleting license plate:', error);
+            if (licenseError) {
+                licenseError.textContent = 'Failed to delete license plate';
+                licenseError.style.display = 'block';
+            }
+        }
+    }
+
     // Check authentication state
     auth.onAuthStateChanged(async (user) => {
         console.log('Auth state changed:', user?.email);
@@ -100,7 +415,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (userDoc.exists) {
                 const userData = userDoc.data();
                 console.log('User data loaded:', userData);
-                // Update UI with user data
                 updateUI(userData);
             } else {
                 console.log('No user document found');
@@ -109,6 +423,32 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error('Error loading user data:', error);
         }
     });
+
+    // Add license plate event listener
+    if (addLicenseBtn) {
+        addLicenseBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            const plate = newLicensePlateInput.value.trim().toUpperCase();
+            if (!plate) {
+                licenseError.textContent = 'Please enter a license plate number';
+                licenseError.style.display = 'block';
+                return;
+            }
+            addLicensePlate(plate);
+        });
+    }
+
+    // Logout functionality
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', async () => {
+            try {
+                await auth.signOut();
+                window.location.href = 'index.html';
+            } catch (error) {
+                console.error('Error signing out:', error);
+            }
+        });
+    }
 
     // Function to check and collect phone number
     async function checkAndCollectPhoneNumber(user) {
@@ -244,103 +584,6 @@ document.addEventListener('DOMContentLoaded', () => {
             showError('Error loading license plates');
             console.error('Error loading license plates:', error);
         }
-    }
-
-    // Add new license plate
-    async function addLicensePlate(plate) {
-        const user = auth.currentUser;
-        if (!user) return;
-
-        try {
-            // Get the user document reference
-            const userDocRef = db.collection('users').doc(user.uid);
-            const userDoc = await userDocRef.get();
-            
-            // Check if user document exists, create it if not
-            if (!userDoc.exists) {
-                console.log("User document doesn't exist when adding license plate, creating it now...");
-                try {
-                    // Import setDoc dynamically
-                    const { setDoc } = await import("https://www.gstatic.com/firebasejs/11.3.0/firebase-firestore.js");
-                    
-                    // Create a new user document with the plate
-                    await setDoc(userDocRef, {
-                        email: user.email,
-                        licensePlates: [plate],
-                        createdAt: new Date().toISOString(),
-                        uid: user.uid
-                    });
-                    
-                    console.log("Created new user document with license plate");
-                    
-                    // Reload the list
-                    await loadLicensePlates();
-                    hideError();
-                    return;
-                } catch (createError) {
-                    console.error("Failed to create user document:", createError);
-                    showError("Failed to create user profile");
-                    return;
-                }
-            }
-            
-            // Normal flow - user document exists
-            const currentPlates = userDoc.data()?.licensePlates || [];
-
-            if (currentPlates.length >= 3) {
-                showError('Maximum number of license plates (3) reached');
-                return;
-            }
-
-            if (currentPlates.includes(plate)) {
-                showError('This license plate is already registered');
-                return;
-            }
-
-            const newPlates = [...currentPlates, plate];
-            await userDocRef.update({
-                licensePlates: newPlates
-            });
-
-            // Clear input and reload list
-            newLicensePlateInput.value = '';
-            await loadLicensePlates();
-            hideError();
-        } catch (error) {
-            showError('Failed to add license plate');
-            console.error('Error adding license plate:', error);
-        }
-    }
-
-    // Delete license plate
-    async function deleteLicensePlate(index) {
-        const user = auth.currentUser;
-        if (!user) return;
-
-        try {
-            const userDoc = await db.collection('users').doc(user.uid).get();
-            const currentPlates = userDoc.data()?.licensePlates || [];
-            
-            const newPlates = currentPlates.filter((_, i) => i !== index);
-            await userDoc.ref.update({
-                licensePlates: newPlates
-            });
-
-            await loadLicensePlates();
-        } catch (error) {
-            showError('Failed to delete license plate');
-            console.error('Error deleting license plate:', error);
-        }
-    }
-
-    // Error handling functions
-    function showError(message) {
-        licenseError.textContent = message;
-        licenseError.style.display = 'block';
-    }
-
-    function hideError() {
-        licenseError.style.display = 'none';
     }
 
     // Event Listeners
