@@ -418,7 +418,7 @@
         <!-- Login form -->
         <div class="ui segment grey auth-form" id="login-container">
             <h2 class="auth-title">Welcome Back!</h2>
-            <form class="ui form" id="login-form" onsubmit="return false;">
+            <form class="ui form" id="login-form">
                 <div class="ui stacked segment">
                     <div class="ui error message" id="login-error-message"></div>
                     <div class="field">
@@ -433,7 +433,10 @@
                             <input type="password" name="password" id="login-password" placeholder="Password" required>
                         </div>
                     </div>
-                    <button type="submit" class="ui fluid large primary submit button" id="Login">Login</button>
+                    <button type="submit" class="ui fluid large primary submit button" id="Login">
+                        <i class="sign-in icon"></i>
+                        Login
+                    </button>
                     <div class="ui divider"></div>
                     <a id="forgot-password-btn" class="ui basic fluid button">Forgot Password?</a>
                 </div>

@@ -305,6 +305,18 @@
                     </div>
                 </div>
             </div>
+
+            <div class="ui segment" id="admin-settings" style="display: none;">
+                <h3 class="ui header">Backend Configuration</h3>
+                <div class="ui form">
+                    <div class="field">
+                        <label>Backend URL</label>
+                        <input type="text" id="backendUrl" placeholder="http://your-local-ip:3001">
+                    </div>
+                    <button class="ui primary button" onclick="updateBackendUrl()">Update Backend URL</button>
+                    <p>Current Backend URL: <span id="currentBackendUrl"></span></p>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -363,5 +375,25 @@
 
     <script src="firebase.js" type="module"></script>
     <script src="dashboard.js" type="module"></script>
+    <script type="module">
+        import config from './config.js';
+        
+        // Only show admin settings if user is admin
+        const showAdminSettings = () => {
+            const isAdmin = localStorage.getItem('isAdmin') === 'true';
+            document.getElementById('admin-settings').style.display = isAdmin ? 'block' : 'none';
+            document.getElementById('currentBackendUrl').textContent = config.BACKEND_URL;
+        };
+
+        window.updateBackendUrl = () => {
+            const newUrl = document.getElementById('backendUrl').value;
+            if (newUrl) {
+                config.setBackendUrl(newUrl);
+            }
+        };
+
+        // Call this when page loads
+        showAdminSettings();
+    </script>
 </body>
 </html> 

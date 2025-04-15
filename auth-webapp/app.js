@@ -108,17 +108,21 @@ import {
     getDoc,
     addDoc
 } from "https://www.gstatic.com/firebasejs/11.3.0/firebase-firestore.js";
-import { getAuth, createUserWithEmailAndPassword, onAuthStateChanged, signOut, signInWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail, fetchSignInMethodsForEmail} from "https://www.gstatic.com/firebasejs/11.3.0/firebase-auth.js";
+import { 
+    getAuth, 
+    createUserWithEmailAndPassword, 
+    onAuthStateChanged, 
+    signOut, 
+    signInWithEmailAndPassword, 
+    sendPasswordResetEmail
+} from "https://www.gstatic.com/firebasejs/11.3.0/firebase-auth.js";
 import { db, auth } from './firebase.js';
 
-// Remove the problematic import and add the function directly here
+// Utility function for license plate validation
 function isValidLicensePlate(plate) {
-    // Basic license plate validation
     if (!plate) return false;
     plate = plate.trim().toUpperCase();
-    // Check if plate has at least 2 characters and no more than 8
     if (plate.length < 2 || plate.length > 8) return false;
-    // Check if plate contains only letters, numbers, and hyphens
     return /^[A-Z0-9-]+$/.test(plate);
 }
 
@@ -128,309 +132,159 @@ console.log("Imports completed");
 console.log("Firestore db object type:", typeof db);
 console.log("Auth object type:", typeof auth);
 
-// Wrap the main code in try-catch to catch any errors
-try {
-    document.addEventListener('DOMContentLoaded', () => {
-        console.log("DOM Content Loaded - START");
+// Wait for DOM to be fully loaded
+document.addEventListener('DOMContentLoaded', () => {
+    console.log("DOM Content Loaded - Setting up event listeners");
+
+    // Get all form elements once
+    const elements = {
+        // Login elements
+        loginForm: document.getElementById("login-form"),
+        loginEmail: document.getElementById("login-email"),
+        loginPassword: document.getElementById("login-password"),
+        loginError: document.getElementById("login-error-message"),
+        loginBtn: document.getElementById("Login"),
+
+        // Signup elements
+        signupForm: document.getElementById("signup-form"),
+        email: document.getElementById("email"),
+        password: document.getElementById("password"),
+        license: document.getElementById("license"),
+        signupBtn: document.getElementById("Signup"),
+        errorElement: document.getElementById("error"),
+        successMessage: document.getElementById('successMessage'),
+
+        // Navigation buttons
+        needAccountBtn: document.getElementById('need-an-account-btn'),
+        haveAccountBtn: document.getElementById('have-an-account-btn'),
+        forgotPasswordBtn: document.getElementById('forgot-password-btn'),
+        backToLoginBtn: document.getElementById('back-to-login'),
+
+        // Forms
+        resetPasswordForm: document.getElementById("reset-password-form"),
+        resetPasswordEmail: document.getElementById("reset-password-email"),
+        resetPasswordBtn: document.getElementById("reset-password-btn"),
+        resetPasswordMessage: document.getElementById("rp-message")
+    };
+
+    // Log found elements
+    console.log("Elements found:", Object.entries(elements).reduce((acc, [key, value]) => {
+        acc[key] = !!value;
+        return acc;
+    }, {}));
+
+    // Handle Login
+    async function handleLogin(e) {
+        e.preventDefault();
+        console.log("Login attempt started");
+
+        // Disable button and show loading state
+        elements.loginBtn.disabled = true;
+        elements.loginBtn.innerHTML = '<i class="spinner loading icon"></i> Logging in...';
         
         try {
-            // Show login form by default
-            showForm("login-container");
-            
-            // Get form elements
-            const loginForm = document.getElementById("login-form");
-            const loginBtn = document.getElementById("Login");
-            
-            console.log("Critical elements found:", {
-                loginForm: !!loginForm,
-                loginBtn: !!loginBtn
-            });
+            const email = elements.loginEmail.value.trim();
+            const password = elements.loginPassword.value;
 
-            // Basic click handler for testing
-            if (loginBtn) {
-                loginBtn.onclick = function(e) {
-                    console.log("Login button clicked - basic handler");
-                    e.preventDefault();
-                };
+            if (!email || !password) {
+                throw new Error("Please enter both email and password");
             }
 
-            // Rest of your existing code...
+            console.log("Attempting to sign in with email:", email);
+            const userCredential = await signInWithEmailAndPassword(auth, email, password);
+            console.log("Login successful, user:", userCredential.user.uid);
 
-            // Get form elements
-            const signupForm = document.getElementById("signup-form");
-            const resetPasswordForm = document.getElementById("reset-password-form");
-            const successMessage = document.getElementById('successMessage');
-            
-            // Get form navigation buttons
-            const needAccountBtn = document.getElementById('need-an-account-btn');
-            const haveAccountBtn = document.getElementById('have-an-account-btn');
-            const forgotPasswordBtn = document.getElementById('forgot-password-btn');
-            const backToLoginBtn = document.getElementById('back-to-login');
-            
-            // Signup form elements
-            const email = document.getElementById("email");
-            const password = document.getElementById("password");
-            const license = document.getElementById("license");
-            const signupBtn = document.getElementById("Signup");
-            const errorElement = document.getElementById("error");
-            
-            // Login form elements
-            const loginEmail = document.getElementById("login-email");
-            const loginPassword = document.getElementById("login-password");
-            const loginError = document.getElementById('login-error-message');
-            
-            console.log("Form elements found:", {
-                loginForm: !!loginForm,
-                loginBtn: !!loginBtn,
-                loginEmail: !!loginEmail,
-                loginPassword: !!loginPassword,
-                loginError: !!loginError
-            });
-            
-            // Function to handle login
-            async function handleLogin(e) {
-                e.preventDefault(); // Prevent form from submitting normally
-                console.log("Login attempt started");
-                
-                // Get the input values and UI elements we need
-                const email = loginEmail.value.trim();
-                const password = loginPassword.value;
-                
-                // First check if email and password were entered
-                if (!email || !password) {
-                    console.log("Missing email or password");
-                    if (loginError) {
-                        loginError.innerHTML = "Please enter both email and password";
-                        loginError.classList.add('visible');
-                    }
-                    return;
-                }
-                
-                try {
-                    // Show loading state
-                    loginBtn.disabled = true;
-                    loginBtn.innerHTML = '<i class="spinner loading icon"></i> Logging in...';
-                    console.log("Attempting to sign in with email:", email);
-                    
-                    // Try to log in with Firebase
-                    const userCredential = await signInWithEmailAndPassword(auth, email, password);
-                    console.log("Login successful, user:", userCredential.user.uid);
-                    
-                    // If successful, show success and redirect
-                    loginBtn.innerHTML = '<i class="check icon"></i> Success! Redirecting...';
-                    loginError.innerHTML = "";
-                    loginError.classList.remove('visible');
-                    
-                    // Wait a moment before redirecting
-                    setTimeout(() => {
-                        console.log("Redirecting to dashboard...");
-                        window.location.href = "dashboard.html";
-                    }, 1000);
-                    
-                } catch (error) {
-                    console.error("Login error:", error);
-                    console.error("Error code:", error.code);
-                    console.error("Error message:", error.message);
-                    
-                    // If there's an error, show a friendly message
-                    let message = "Login failed. Please check your email and password.";
-                    
-                    if (error.code === 'auth/user-not-found') {
-                        message = "No account found with this email";
-                    } else if (error.code === 'auth/wrong-password') {
-                        message = "Incorrect password";
-                    } else if (error.code === 'auth/invalid-email') {
-                        message = "Invalid email address";
-                    }
-                    
-                    if (loginError) {
-                        loginError.innerHTML = message;
-                        loginError.classList.add('visible');
-                    }
-                    
-                    // Reset the button
-                    loginBtn.disabled = false;
-                    loginBtn.innerHTML = 'Login';
-                }
-            }
+            // Show success state
+            elements.loginBtn.innerHTML = '<i class="check icon"></i> Success!';
+            elements.loginError.style.display = 'none';
 
-            // Set up event listeners for the login form and button
-            if (loginForm) {
-                console.log("Adding submit event listener to login form");
-                // Remove the old event listener if it exists
-                loginForm.removeEventListener("submit", handleLogin);
-                // Add the new event listener
-                loginForm.addEventListener("submit", function(e) {
-                    console.log("Login form submitted!");
-                    e.preventDefault(); // Prevent default form submission
-                    handleLogin(e);
-                });
-            } else {
-                console.error("Login form not found");
-            }
+            // Redirect to dashboard
+            console.log("Redirecting to dashboard...");
+            window.location.href = "dashboard.html";
 
-            if (loginBtn) {
-                console.log("Adding click event listener to login button");
-                // Remove the old event listener if it exists
-                loginBtn.removeEventListener("click", handleLogin);
-                // Add the new event listener
-                loginBtn.addEventListener("click", function(e) {
-                    console.log("Login button clicked!");
-                    e.preventDefault(); // Prevent default button behavior
-                    handleLogin(e);
-                });
-            } else {
-                console.error("Login button not found");
-            }
-
-            // Check if user is already logged in
-            onAuthStateChanged(auth, (user) => {
-                if (user) {
-                    console.log("User is already logged in:", user.uid);
-                    // If logged in and on login page, go to dashboard
-                    if (window.location.pathname.includes('index.html') || window.location.pathname === '/') {
-                        window.location.href = 'dashboard.html';
-                    }
-                } else {
-                    console.log("No user currently logged in");
-                }
-            });
-
-            // Show login form by default
-            showForm("login-container");
-            
-            // Add event listeners for form navigation
-            if (needAccountBtn) {
-                needAccountBtn.addEventListener("click", (e) => {
-                    e.preventDefault();
-                    console.log("Need account button clicked");
-                    window.showForm("signup-form");
-                });
-            }
-            
-            if (haveAccountBtn) {
-                haveAccountBtn.addEventListener("click", (e) => {
-                    e.preventDefault();
-                    console.log("Have account button clicked");
-                    window.showForm("login-container");
-                });
-            }
-            
-            if (forgotPasswordBtn) {
-                forgotPasswordBtn.addEventListener("click", (e) => {
-                    e.preventDefault();
-                    console.log("Forgot password button clicked");
-                    window.showForm("reset-password-form");
-                });
-            }
-            
-            if (backToLoginBtn) {
-                backToLoginBtn.addEventListener("click", (e) => {
-                    e.preventDefault();
-                    console.log("Back to login button clicked");
-                    window.showForm("login-container");
-                });
-            }
-            
-            // Add direct signup handler
-            if (signupBtn) {
-                console.log("Adding click handler to signup button");
-                signupBtn.addEventListener("click", async function(e) {
-                    e.preventDefault();
-                    console.log("=== SIMPLIFIED SIGNUP FUNCTION ===");
-                    
-                    // Clear any error messages
-                    if (errorElement) {
-                        errorElement.innerHTML = "";
-                        errorElement.classList.remove("visible");
-                    }
-                    
-                    // Basic form validation
-                    if (!email || !email.value || !password || !password.value || !license || !license.value) {
-                        console.log("Missing required fields");
-                        if (errorElement) {
-                            errorElement.innerHTML = "All fields are required";
-                            errorElement.classList.add("visible");
-                        }
-                        return;
-                    }
-                    
-                    // Get form values
-                    const userEmail = email.value.trim();
-                    const userPassword = password.value;
-                    const userLicense = license.value.trim().toUpperCase();
-                    
-                    console.log("Form data:", { email: userEmail, license: userLicense });
-                    
-                    try {
-                        // STEP 1: Create the authentication user
-                        console.log("Creating Firebase Auth user...");
-                        const userCredential = await createUserWithEmailAndPassword(auth, userEmail, userPassword);
-                        const user = userCredential.user;
-                        console.log("Auth user created:", user.uid);
-                        
-                        // STEP 2: Create user data object that EXACTLY matches your existing structure
-                        const currentTime = new Date().toISOString();
-                        const userData = {
-                            createdAt: currentTime,
-                            email: userEmail,
-                            licensePlates: [userLicense],
-                            uid: user.uid
-                        };
-                        
-                        console.log("User data prepared:", userData);
-                        
-                        // STEP 3: Write to Firestore using the SIMPLEST possible approach
-                        console.log("Writing to Firestore users collection...");
-                        
-                        try {
-                            // Create document reference with user's UID as the document ID
-                            const userRef = doc(db, "users", user.uid);
-                            
-                            // Set the document data
-                            await setDoc(userRef, userData);
-                            console.log("User document created successfully!");
-                            
-                            // Show success message
-                            if (successMessage) {
-                                successMessage.style.display = 'block';
-                                successMessage.innerHTML = "Account created successfully! Redirecting...";
-                            }
-                            
-                            // Redirect after a short delay
-                            setTimeout(() => {
-                                window.location.href = "dashboard.html";
-                            }, 2000);
-                        } catch (firestoreError) {
-                            // Log any Firestore errors
-                            console.error("FIRESTORE ERROR:", firestoreError);
-                            console.error("Code:", firestoreError.code);
-                            console.error("Message:", firestoreError.message);
-                            
-                            // Show error to user
-                            if (errorElement) {
-                                errorElement.innerHTML = "Error saving your information: " + firestoreError.message;
-                                errorElement.classList.add("visible");
-                            }
-                        }
-                    } catch (authError) {
-                        // Handle authentication errors
-                        console.error("AUTH ERROR:", authError);
-                        console.error("Code:", authError.code);
-                        console.error("Message:", authError.message);
-                        
-                        // Show error to user
-                        if (errorElement) {
-                            errorElement.innerHTML = authError.message;
-                            errorElement.classList.add("visible");
-                        }
-                    }
-                });
-            }
         } catch (error) {
-            console.error("DOM Content Loaded error:", error);
+            console.error("Login error:", error);
+            
+            // Show error message
+            let message = "Login failed. Please check your email and password.";
+            if (error.code === 'auth/user-not-found') message = "No account found with this email";
+            if (error.code === 'auth/wrong-password') message = "Incorrect password";
+            if (error.code === 'auth/invalid-email') message = "Invalid email address";
+
+            elements.loginError.textContent = message;
+            elements.loginError.style.display = 'block';
+
+            // Reset button state
+            elements.loginBtn.disabled = false;
+            elements.loginBtn.innerHTML = '<i class="sign-in icon"></i> Login';
+        }
+    }
+
+    // Add event listeners
+    if (elements.loginForm) {
+        elements.loginForm.addEventListener("submit", handleLogin);
+    }
+
+    // Form navigation
+    if (elements.needAccountBtn) {
+        elements.needAccountBtn.addEventListener("click", (e) => {
+            e.preventDefault();
+            window.showForm("signup-form");
+        });
+    }
+
+    if (elements.haveAccountBtn) {
+        elements.haveAccountBtn.addEventListener("click", (e) => {
+            e.preventDefault();
+            window.showForm("login-container");
+        });
+    }
+
+    if (elements.forgotPasswordBtn) {
+        elements.forgotPasswordBtn.addEventListener("click", (e) => {
+            e.preventDefault();
+            window.showForm("reset-password-form");
+        });
+    }
+
+    if (elements.backToLoginBtn) {
+        elements.backToLoginBtn.addEventListener("click", (e) => {
+            e.preventDefault();
+            window.showForm("login-container");
+        });
+    }
+
+    // Reset Password Handler
+    if (elements.resetPasswordBtn) {
+        elements.resetPasswordBtn.addEventListener("click", async (e) => {
+            e.preventDefault();
+            const email = elements.resetPasswordEmail.value.trim();
+            
+            try {
+                await sendPasswordResetEmail(auth, email);
+                elements.resetPasswordMessage.textContent = "Password reset email sent! Check your inbox.";
+                elements.resetPasswordMessage.classList.remove("hidden", "error");
+                elements.resetPasswordMessage.classList.add("success");
+            } catch (error) {
+                elements.resetPasswordMessage.textContent = error.message;
+                elements.resetPasswordMessage.classList.remove("hidden", "success");
+                elements.resetPasswordMessage.classList.add("error");
+            }
+        });
+    }
+
+    // Check authentication state
+    onAuthStateChanged(auth, (user) => {
+        if (user) {
+            console.log("User is already logged in:", user.uid);
+            if (window.location.pathname.includes('index.html') || window.location.pathname === '/') {
+                window.location.href = 'dashboard.html';
+            }
+        } else {
+            console.log("No user currently logged in");
         }
     });
-} catch (error) {
-    console.error("Main code error:", error);
-}
+
+    // Show login form by default
+    window.showForm("login-container");
+});

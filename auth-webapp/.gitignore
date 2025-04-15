@@ -1,4 +1,21 @@
+# Environment variables
 .env
+.env.local
+.env.development
+.env.production
+
+# Firebase config
+firebase-config.js
+firebase-credentials.json
+
+# Dependencies
 node_modules/
+
+# System files
 .DS_Store
-.vercel 
+.vercel
+*.log
+
+# IDE files
+.vscode/
+.idea/ 
