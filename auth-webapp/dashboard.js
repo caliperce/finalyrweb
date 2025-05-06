@@ -4,29 +4,49 @@ const db = firebase.firestore();
 
 // Server Configuration
 const SERVER_CONFIG = {
-    LOCATION_1: 'http://192.168.90.127:3001',
-    LOCATION_2: 'http://192.168.0.123:3001',
-    VERCEL: 'https://finalyrweb.vercel.app.vercel.app' // Add your Vercel URL here
+    LOCATION_1: 'http://192.168.90.127:3001',  // College
+    LOCATION_2: 'http://192.168.0.123:3001',   // Home
+    LOCAL: 'http://localhost:3001',            // Local testing
+    VERCEL: 'https://finalyrweb.vercel.app'    // Production
 };
 
 // Function to get the current server URL from localStorage or default
 function getCurrentServerURL() {
-    return localStorage.getItem('SERVER_URL') || SERVER_CONFIG.LOCATION_2;
+    // Try to get from localStorage first
+    const savedURL = localStorage.getItem('SERVER_URL');
+    if (savedURL) return savedURL;
+
+    // If no saved URL, try to auto-detect based on window location
+    const hostname = window.location.hostname;
+    if (hostname.includes('192.168.90')) {
+        return SERVER_CONFIG.LOCATION_1;  // College
+    } else if (hostname.includes('192.168.0')) {
+        return SERVER_CONFIG.LOCATION_2;  // Home
+    } else if (hostname === 'localhost') {
+        return SERVER_CONFIG.LOCAL;       // Local
+    }
+    
+    // Default to LOCATION_2 if can't determine
+    return SERVER_CONFIG.LOCATION_2;
 }
 
-// Function to switch server URL
-function switchServerURL(location) {
-    localStorage.setItem('SERVER_URL', SERVER_CONFIG[location]);
-    console.log('🔄 Switched server URL to:', SERVER_CONFIG[location]);
-    // Reload the page to apply changes
-    window.location.reload();
-}
-
-// Use the server URL from localStorage
+// Use the server URL from localStorage or auto-detect
 const SERVER_URL = getCurrentServerURL();
 
 // Log the server URL for debugging
 console.log('🌐 Using server URL:', SERVER_URL);
+
+// Function to check server health
+async function checkServerHealth() {
+    try {
+        const response = await fetch(`${SERVER_URL}/health`);
+        if (!response.ok) throw new Error(`Server health check failed: ${response.status}`);
+        return true;
+    } catch (error) {
+        console.error('❌ Server health check failed:', error);
+        return false;
+    }
+}
 
 document.addEventListener('DOMContentLoaded', () => {
     console.log('Dashboard loaded, checking auth state...');
@@ -1062,12 +1082,18 @@ function showNotification(message, type = 'info') {
     }, 5000);
 }
 
-// Function to poll for new entries
+// Modified polling function with better error handling
 async function pollForNewEntries() {
     try {
         console.log('🔄 Polling for new entries...');
         console.log('🌐 Using server URL:', SERVER_URL);
         
+        // Check server health first
+        const isServerHealthy = await checkServerHealth();
+        if (!isServerHealthy) {
+            throw new Error('Server is not responding');
+        }
+
         // Get the current user
         const user = auth.currentUser;
         if (!user) {
@@ -1085,19 +1111,31 @@ async function pollForNewEntries() {
             return;
         }
 
-        // Add cache-busting parameter
+        // Add cache-busting parameter and timeout
         const timestamp = new Date().getTime();
         console.log('🔍 Fetching latest entry from:', `${SERVER_URL}/latest-entry?v=${timestamp}`);
-        const response = await fetch(`${SERVER_URL}/latest-entry?v=${timestamp}`);
         
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+
+        const response = await fetch(`${SERVER_URL}/latest-entry?v=${timestamp}`, {
+            signal: controller.signal,
+            headers: {
+                'Cache-Control': 'no-cache',
+                'Pragma': 'no-cache'
+            }
+        });
+        
+        clearTimeout(timeoutId);
+
         if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+            throw new Error(`Server responded with status: ${response.status}`);
         }
-        
+
         const result = await response.json();
         console.log('📥 Received response:', result);
-        
-        // If we have new data and it hasn't been processed yet
+
+        // Process the result as before...
         if (result.success && result.data && result.data.licensePlate) {
             const currentEntry = result.data;
             console.log('📋 Current entry:', currentEntry);
@@ -1135,20 +1173,42 @@ async function pollForNewEntries() {
         }
     } catch (error) {
         console.error('❌ Error polling for new entries:', error);
+        if (error.name === 'AbortError') {
+            console.log('⚠️ Request timed out, will retry next interval');
+        } else if (error.message.includes('Failed to fetch')) {
+            console.log('⚠️ Server connection failed, will retry next interval');
+        }
         showNotification('Error checking for new entries', 'error');
     }
 }
 
-// Set up polling interval with immediate first call
+// Set up polling interval with better initialization
 function setupParkingListener() {
     console.log('🔄 Setting up parking entry listener...');
-    // Poll immediately
-    pollForNewEntries();
-    // Then set up interval
-    setInterval(pollForNewEntries, 5000);
-    console.log('✅ Polling system initialized');
-    showNotification('Parking detection system started', 'info');
+    
+    // First verify server connection
+    checkServerHealth().then(isHealthy => {
+        if (isHealthy) {
+            console.log('✅ Server connection verified');
+            // Poll immediately
+            pollForNewEntries();
+            // Then set up interval
+            window.parkingInterval = setInterval(pollForNewEntries, 5000);
+            console.log('✅ Polling system initialized');
+            showNotification('Parking detection system started', 'success');
+        } else {
+            console.error('❌ Could not connect to server');
+            showNotification('Could not connect to parking system', 'error');
+        }
+    });
 }
+
+// Clean up intervals when page unloads
+window.addEventListener('beforeunload', () => {
+    if (window.parkingInterval) {
+        clearInterval(window.parkingInterval);
+    }
+});
 
 // Set up polling interval for exits
 function setupExitListener() {
