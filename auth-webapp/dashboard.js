@@ -1016,7 +1016,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             console.log('Setting up active parking monitor for user:', user.email);
-            showParkingLoadingState();
+            uiManager.showParkingLoadingState();
 
             try {
                 // Get user's license plates
@@ -1026,7 +1026,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     if (userLicensePlates.length === 0) {
                         console.log('❌ User has no registered license plates');
-                        hideParkingLoadingState();
+                        uiManager.hideParkingLoadingState();
                         return;
                     }
 
@@ -1037,7 +1037,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     // Set up real-time listener
                     const unsubscribe = onSnapshot(q, (snapshot) => {
-                        hideParkingLoadingState();
+                        uiManager.hideParkingLoadingState();
                         console.log(`Active parking snapshot received: ${snapshot.docs.length} entries`);
 
                         // Handle document changes
@@ -1057,12 +1057,12 @@ document.addEventListener('DOMContentLoaded', () => {
                         Object.keys(timerIntervals).forEach(key => delete timerIntervals[key]);
 
                         // Validate and render entries
-                        const validEntries = this.validateParkingEntries(snapshot.docs);
-                        this.renderActiveParkingEntries(validEntries);
+                        const validEntries = uiManager.validateParkingEntries(snapshot.docs);
+                        uiManager.renderActiveParkingEntries(validEntries);
                     }, (error) => {
-                        hideParkingLoadingState();
+                        uiManager.hideParkingLoadingState();
                         console.error('Error in active parking snapshot:', error);
-                        this.showParkingError('Error monitoring active parking: ' + error.message);
+                        uiManager.showParkingError('Error monitoring active parking: ' + error.message);
                     });
 
                     // Cleanup on page unload
@@ -1072,14 +1072,14 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     });
                 }).catch(error => {
-                    hideParkingLoadingState();
+                    uiManager.hideParkingLoadingState();
                     console.error('Error getting user license plates:', error);
-                    this.showParkingError('Failed to get license plates: ' + error.message);
+                    uiManager.showParkingError('Failed to get license plates: ' + error.message);
                 });
             } catch (error) {
-                hideParkingLoadingState();
+                uiManager.hideParkingLoadingState();
                 console.error('Error setting up active parking monitor:', error);
-                this.showParkingError('Failed to monitor active parking: ' + error.message);
+                uiManager.showParkingError('Failed to monitor active parking: ' + error.message);
             }
         }
     };
@@ -1271,270 +1271,6 @@ function showNotification(message, type = 'info') {
             notification.remove();
         }
     }, 5000);
-}
-
-// Modified polling function with better error handling
-async function pollForNewEntries() {
-    try {
-        console.log('🔄 Polling for new entries...');
-        
-        // Get the current user
-        const user = auth.currentUser;
-        if (!user) {
-            console.log('❌ No user logged in');
-            return;
-        }
-
-        // Get user's license plates
-        const userDoc = await db.collection('users').doc(user.uid).get();
-        const userLicensePlates = userDoc.data()?.licensePlates || [];
-        console.log('📋 User license plates:', userLicensePlates);
-
-        if (userLicensePlates.length === 0) {
-            console.log('❌ User has no registered license plates');
-            return;
-        }
-
-        // Add cache-busting parameter and timeout
-        const timestamp = new Date().getTime();
-        const apiUrl = `${SERVER_URL}/latest-entry`;
-        console.log('🔍 Fetching latest entry from:', apiUrl);
-        
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
-
-        const response = await fetch(`${apiUrl}?v=${timestamp}`, {
-            signal: controller.signal,
-            headers: {
-                'Accept': 'application/json',
-                'Content-Type': 'application/json',
-                'Cache-Control': 'no-cache',
-                'Pragma': 'no-cache'
-            }
-        });
-        
-        clearTimeout(timeoutId);
-
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error('Server error response:', errorText);
-            throw new Error(`Server responded with status: ${response.status}`);
-        }
-
-        const contentType = response.headers.get('content-type');
-        if (!contentType || !contentType.includes('application/json')) {
-            const responseText = await response.text();
-            console.error('Non-JSON response:', responseText);
-            throw new Error('Server did not return JSON');
-        }
-
-        const result = await response.json();
-        console.log('📥 Received response:', result);
-
-        if (result.success && result.data && result.data.licensePlate) {
-            const currentEntry = result.data;
-            
-            // Check if this license plate belongs to the user
-            if (!userLicensePlates.includes(currentEntry.licensePlate)) {
-                console.log('⚠️ License plate not registered to current user:', currentEntry.licensePlate);
-                return;
-            }
-            
-            // Get the last 5 minutes of entries to avoid duplicates
-            const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
-            const recentEntriesQuery = await db.collection('active_parking')
-                .where('licensePlate', '==', currentEntry.licensePlate)
-                .where('entryTimestamp', '>', fiveMinutesAgo.toISOString())
-                .get();
-
-            if (recentEntriesQuery.empty) {
-                console.log('🆕 New valid entry detected:', currentEntry);
-                await handleNewParkingEntry(currentEntry.licensePlate, currentEntry.timestamp);
-                showNotification(`New parking entry detected for ${currentEntry.licensePlate}`, 'success');
-                
-                // Force refresh the UI
-                const activeParkingRef = db.collection('active_parking');
-                const snapshot = await activeParkingRef
-                    .where('licensePlate', 'in', userLicensePlates)
-                    .get();
-                const entries = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                uiManager.renderActiveParkingEntries(entries);
-            } else {
-                console.log('⏭️ Recent entry already exists, skipping...');
-            }
-        }
-    } catch (error) {
-        console.error('❌ Error polling for new entries:', error);
-        if (error.name === 'AbortError') {
-            console.log('⚠️ Request timed out, will retry next interval');
-        } else if (error.message.includes('Failed to fetch')) {
-            console.log('⚠️ Server connection failed, will retry next interval');
-        }
-        showNotification('Error checking for new entries', 'error');
-    }
-}
-
-// Set up polling interval with better initialization
-function setupParkingListener() {
-    console.log('🔄 Setting up parking entry listener...');
-    
-    // First verify server connection
-    checkServerHealth().then(isHealthy => {
-        if (isHealthy) {
-            console.log('✅ Server connection verified');
-            // Poll immediately
-            pollForNewEntries();
-            // Then set up interval
-            window.parkingInterval = setInterval(pollForNewEntries, 5000);
-            console.log('✅ Polling system initialized');
-            showNotification('Parking detection system started', 'success');
-        } else {
-            console.error('❌ Could not connect to server');
-            showNotification('Could not connect to parking system', 'error');
-        }
-    });
-}
-
-// Clean up intervals when page unloads
-window.addEventListener('beforeunload', () => {
-    if (window.parkingInterval) {
-        clearInterval(window.parkingInterval);
-    }
-});
-
-// Set up polling interval for exits
-function setupExitListener() {
-    console.log('🔄 Setting up exit detection listener...');
-    // Initialize the last processed exit timestamp
-    window.lastProcessedExitTimestamp = null;
-    // Poll every 5 seconds
-    setInterval(pollForExits, 5000);
-    console.log('✅ Exit polling system initialized');
-    
-    // Show initial notification
-    showNotification('Exit detection system started', 'info');
-}
-
-// Function to poll for vehicle exits
-async function pollForExits() {
-    try {
-        console.log('🔄 Polling for vehicle exits...');
-        console.log('🌐 Using server URL:', SERVER_URL);
-        const timestamp = new Date().getTime();
-        const response = await fetch(`${SERVER_URL}/latest-exit?v=${timestamp}`);
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        const result = await response.json();
-        console.log('📥 Received exit response:', result);
-        
-        // If we have new exit data and it hasn't been processed yet
-        if (result.success && result.data && result.data.licensePlate) {
-            // Validate the data from the server
-            const currentExit = result.data;
-            console.log('📋 Current exit:', currentExit);
-            
-            // Validate essential fields
-            if (!currentExit.licensePlate || !currentExit.exitTimestamp) {
-                console.error('❌ Invalid exit data - missing required fields:', currentExit);
-                return;
-            }
-            
-            // Validate timestamp format
-            const exitTime = new Date(currentExit.exitTimestamp);
-            if (!(exitTime instanceof Date && !isNaN(exitTime))) {
-                console.error('❌ Invalid exit timestamp:', currentExit.exitTimestamp);
-                return;
-            }
-            
-            console.log('🕒 Last processed exit timestamp:', window.lastProcessedExitTimestamp);
-            
-            // Only process if we haven't seen this exit before
-            if (!window.lastProcessedExitTimestamp || window.lastProcessedExitTimestamp !== currentExit.exitTimestamp) {
-                console.log('🆕 New valid exit detected:', currentExit);
-                // Get the image URL from the response
-                const exitImageUrl = currentExit.imageUrl;
-                console.log('🖼️ Exit image URL:', exitImageUrl);
-                
-                await handleVehicleExit(currentExit.licensePlate, currentExit.exitTimestamp, exitImageUrl);
-                // Update the last processed exit timestamp
-                window.lastProcessedExitTimestamp = currentExit.exitTimestamp;
-                console.log('✅ Updated last processed exit timestamp to:', currentExit.exitTimestamp);
-            } else {
-                console.log('⏭️ Exit already processed, skipping...');
-            }
-        } else {
-            console.log('ℹ️ No new exits to process');
-        }
-    } catch (error) {
-        console.error('❌ Error polling for exits:', error);
-    }
-}
-
-// Function to handle vehicle exit
-async function handleVehicleExit(licensePlate, exitTimestamp, exitImageUrl) {
-    try {
-        console.log('🚗 Processing vehicle exit:', { licensePlate, exitTimestamp });
-        
-        // Find active parking entry for this license plate
-        const activeParkingRef = db.collection('active_parking');
-        const q = activeParkingRef.where('licensePlate', '==', licensePlate).where('status', '==', 'active');
-        
-        const querySnapshot = await q.get();
-        
-        if (querySnapshot.empty) {
-            console.log('❌ No active parking found for license plate:', licensePlate);
-            showNotification(`No active parking found for ${licensePlate}`, 'warning');
-            return false;
-        }
-        
-        // Get the existing parking document
-        const parkingDoc = querySnapshot.docs[0];
-        const parkingData = parkingDoc.data();
-        const parkingId = parkingDoc.id;
-        
-        // Keep the existing entry image URL
-        const entryImageUrl = parkingData.entryImageUrl;
-        
-        console.log('📝 Updating parking entry:', parkingId);
-        console.log('🖼️ Image URLs:', { entry: entryImageUrl, exit: exitImageUrl });
-        
-        // Calculate parking duration
-        const entryTime = new Date(parkingData.entryTimestamp);
-        const exitTime = new Date(exitTimestamp);
-        const durationMs = exitTime - entryTime;
-        
-        // Convert to hours, minutes, seconds
-        const hours = Math.floor(durationMs / 3600000);
-        const minutes = Math.floor((durationMs % 3600000) / 60000);
-        const seconds = Math.floor((durationMs % 60000) / 1000);
-        const formattedDuration = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-        
-        // Calculate parking fee (example: $2 per hour, minimum 1 hour)
-        const hourlyRate = 2;
-        const billableHours = Math.max(1, Math.ceil(durationMs / 3600000));
-        const parkingFee = billableHours * hourlyRate;
-        
-        await db.collection('active_parking').doc(parkingId).update({
-            exitTimestamp: exitTimestamp,
-            hasPaid: false,
-            status: 'pending_payment',
-            parkingDuration: formattedDuration,
-            parkingDurationMs: durationMs,
-            parkingFee: parkingFee,
-            entryImageUrl: entryImageUrl,  // Preserve the entry image URL
-            exitImageUrl: exitImageUrl || null  // Add the exit image URL
-        });
-        
-        console.log('✅ Successfully updated parking entry with exit information');
-        showNotification(`Vehicle ${licensePlate} has exited. Payment required.`, 'warning');
-        
-        return true;
-    } catch (error) {
-        console.error('Error handling vehicle exit:', error);
-        showNotification('Error processing vehicle exit', 'error');
-        return false;
-    }
 }
 
 // Function to process payment
