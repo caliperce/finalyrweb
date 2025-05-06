@@ -1,3 +1,15 @@
+// Check if we're on the dashboard page
+if (window.location.pathname.includes('dashboard')) {
+    // Add authentication check
+    auth.onAuthStateChanged((user) => {
+        if (!user) {
+            console.log('🔒 No authenticated user found, redirecting to login...');
+            window.location.replace('index.html');
+            return;
+        }
+    });
+}
+
 // Get Firebase instances from the global scope
 const auth = firebase.auth();
 const db = firebase.firestore();
@@ -31,9 +43,8 @@ console.log('🌐 Using server URL:', SERVER_URL);
 document.addEventListener('DOMContentLoaded', () => {
     console.log('Dashboard loaded, checking auth state...');
     
-    // Initialize polling systems
+    // Initialize Firebase listener
     setupParkingListener();
-    setupExitListener();
     
     // Initialize server location dropdown
     const serverLocationSelect = document.getElementById('server-location');
@@ -1079,8 +1090,13 @@ function setupParkingListener() {
 
         if (userLicensePlates.length === 0) {
             console.log('❌ No registered plates to watch');
+            noActiveParkingElement.style.display = 'block';
             return;
         }
+
+        // Show loading state
+        parkingLoadingElement.style.display = 'block';
+        noActiveParkingElement.style.display = 'none';
 
         // Set up real-time listener for active_parking collection
         const unsubscribe = db.collection('active_parking')
@@ -1088,10 +1104,18 @@ function setupParkingListener() {
             .onSnapshot(snapshot => {
                 console.log(`📊 Received update from Firebase. Changes: ${snapshot.docChanges().length}`);
                 
+                // Hide loading state
+                parkingLoadingElement.style.display = 'none';
+                
                 // Process the changes
                 snapshot.docChanges().forEach(change => {
                     const data = change.doc.data();
                     console.log(`🔄 Document ${change.type}:`, data);
+                    
+                    // If this is a new exit (status changed to pending_payment)
+                    if (change.type === 'modified' && data.status === 'pending_payment') {
+                        showNotification(`Vehicle ${data.licensePlate} has exited. Payment required.`, 'warning');
+                    }
                 });
 
                 // Get all documents and organize them by status
@@ -1106,6 +1130,11 @@ function setupParkingListener() {
 
                 // Update UI for active entries
                 console.log(`📋 Active entries: ${activeEntries.length}`);
+                if (activeEntries.length === 0 && pendingEntries.length === 0) {
+                    noActiveParkingElement.style.display = 'block';
+                } else {
+                    noActiveParkingElement.style.display = 'none';
+                }
                 renderActiveParkingEntries(activeEntries);
 
                 // Update UI for pending payments
@@ -1118,6 +1147,9 @@ function setupParkingListener() {
                 }
             }, error => {
                 console.error('❌ Error in Firebase listener:', error);
+                parkingLoadingElement.style.display = 'none';
+                parkingErrorElement.style.display = 'block';
+                parkingErrorMessageElement.textContent = 'Error monitoring parking updates: ' + error.message;
                 showNotification('Error monitoring parking updates', 'error');
             });
 
@@ -1128,6 +1160,9 @@ function setupParkingListener() {
         });
     }).catch(error => {
         console.error('❌ Error getting user data:', error);
+        parkingLoadingElement.style.display = 'none';
+        parkingErrorElement.style.display = 'block';
+        parkingErrorMessageElement.textContent = 'Error setting up parking monitor: ' + error.message;
         showNotification('Error setting up parking monitor', 'error');
     });
 }
