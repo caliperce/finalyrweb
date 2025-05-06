@@ -52,6 +52,12 @@
         .loading {
             display: none;
         }
+        .ui.form.loading .normal-text {
+            display: none;
+        }
+        .ui.form.loading .loading {
+            display: inline-block;
+        }
     </style>
 </head>
 <body>
@@ -92,17 +98,25 @@
     <script>
         // Initialize Firebase
         const firebaseConfig = {
-            apiKey: "AIzaSyB-WA4jwLiy3BoabtKTNC2LYJfweibqI4",
+            apiKey: "AIzaSyB-WA4jwLiy3BoabtKTNC2LYJfweibqI4Q",
             authDomain: "userinfo-10027.firebaseapp.com",
             projectId: "userinfo-10027",
-            storageBucket: "userinfo-10027.firebasestorage.app",
+            storageBucket: "userinfo-10027.appspot.com",
             messagingSenderId: "605892604762",
             appId: "1:605892604762:web:e4e6f1231f144e2e983963",
             measurementId: "G-HVKGHKRG39"
         };
         
+        // Initialize Firebase only if it hasn't been initialized yet
         if (!firebase.apps.length) {
-            firebase.initializeApp(firebaseConfig);
+            try {
+                firebase.initializeApp(firebaseConfig);
+                console.log('Firebase initialized successfully');
+            } catch (error) {
+                console.error('Error initializing Firebase:', error);
+                document.getElementById('error-message').textContent = 'Error initializing application. Please try again later.';
+                document.getElementById('error-message').style.display = 'block';
+            }
         }
         
         const auth = firebase.auth();
@@ -112,7 +126,7 @@
         auth.onAuthStateChanged((user) => {
             if (user && !redirectInProgress) {
                 redirectInProgress = true;
-                console.log('User already signed in, redirecting to dashboard...');
+                console.log('User already signed in:', user.email);
                 setTimeout(() => {
                     window.location.replace('dashboard.html');
                 }, 1000);
@@ -133,8 +147,8 @@
             errorMessage.style.display = 'none';
             
             try {
-                await auth.signInWithEmailAndPassword(email, password);
-                console.log('Login successful');
+                const userCredential = await auth.signInWithEmailAndPassword(email, password);
+                console.log('Login successful:', userCredential.user.email);
                 // Redirect will be handled by onAuthStateChanged
             } catch (error) {
                 console.error('Login error:', error);
