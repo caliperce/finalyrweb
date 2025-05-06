@@ -50,7 +50,7 @@ function getApiUrl(endpoint) {
     if (isHttps) {
         // We're on Vercel, use the API routes
         const vercelUrl = window.location.origin; // This gets the current Vercel URL
-        return `${vercelUrl}/api/parking?type=${endpoint}`;
+        return `${vercelUrl}/api/parking`;  // Remove the type from URL, will add as query param
     }
     
     // We're in development, use the local server
@@ -1152,9 +1152,11 @@ async function pollForNewEntries() {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
 
-        const response = await fetch(`${apiUrl}?v=${timestamp}`, {
+        const response = await fetch(`${apiUrl}?type=latest-entry&v=${timestamp}`, {
             signal: controller.signal,
             headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
                 'Cache-Control': 'no-cache',
                 'Pragma': 'no-cache'
             }
@@ -1163,16 +1165,21 @@ async function pollForNewEntries() {
         clearTimeout(timeoutId);
 
         if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Server error response:', errorText);
             throw new Error(`Server responded with status: ${response.status}`);
+        }
+
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+            throw new Error('Server did not return JSON');
         }
 
         const result = await response.json();
         console.log('📥 Received response:', result);
 
-        // Process the result as before...
         if (result.success && result.data && result.data.licensePlate) {
             const currentEntry = result.data;
-            console.log('📋 Current entry:', currentEntry);
             
             // Check if this license plate belongs to the user
             if (!userLicensePlates.includes(currentEntry.licensePlate)) {
@@ -1202,8 +1209,6 @@ async function pollForNewEntries() {
             } else {
                 console.log('⏭️ Recent entry already exists, skipping...');
             }
-        } else {
-            console.log('ℹ️ No new entries to process');
         }
     } catch (error) {
         console.error('❌ Error polling for new entries:', error);
