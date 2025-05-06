@@ -10,23 +10,33 @@ function handleAuthState() {
     console.log('🔒 Checking auth state for:', currentPage);
     
     return new Promise((resolve) => {
+        let redirectInProgress = false;
+        
         auth.onAuthStateChanged((user) => {
+            if (redirectInProgress) return;
+            
             if (user) {
                 console.log('👤 User is signed in:', user.email);
                 
                 // If on a public page, redirect to dashboard
                 if (publicPages.includes(currentPage)) {
                     console.log('📱 Redirecting to dashboard...');
-                    window.location.replace('dashboard.html');
+                    redirectInProgress = true;
+                    setTimeout(() => {
+                        window.location.replace('dashboard.html');
+                    }, 1000);
                 }
                 resolve(user);
             } else {
                 console.log('❌ No user signed in');
                 
                 // If not on a public page, redirect to login
-                if (!publicPages.includes(currentPage)) {
+                if (!publicPages.includes(currentPage) && currentPage !== '') {
                     console.log('🔒 Redirecting to login...');
-                    window.location.replace('index.html');
+                    redirectInProgress = true;
+                    setTimeout(() => {
+                        window.location.replace('index.html');
+                    }, 1000);
                 }
                 resolve(null);
             }
