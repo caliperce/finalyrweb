@@ -31,6 +31,10 @@ console.log('🌐 Using server URL:', SERVER_URL);
 document.addEventListener('DOMContentLoaded', () => {
     console.log('Dashboard loaded, checking auth state...');
     
+    // Initialize polling systems
+    setupParkingListener();
+    setupExitListener();
+    
     // Initialize server location dropdown
     const serverLocationSelect = document.getElementById('server-location');
     if (serverLocationSelect) {
@@ -1074,6 +1078,7 @@ async function pollForNewEntries() {
         // Get user's license plates
         const userDoc = await db.collection('users').doc(user.uid).get();
         const userLicensePlates = userDoc.data()?.licensePlates || [];
+        console.log('📋 User license plates:', userLicensePlates);
 
         if (userLicensePlates.length === 0) {
             console.log('❌ User has no registered license plates');
@@ -1082,6 +1087,7 @@ async function pollForNewEntries() {
 
         // Add cache-busting parameter
         const timestamp = new Date().getTime();
+        console.log('🔍 Fetching latest entry from:', `${SERVER_URL}/latest-entry?v=${timestamp}`);
         const response = await fetch(`${SERVER_URL}/latest-entry?v=${timestamp}`);
         
         if (!response.ok) {
@@ -1102,19 +1108,6 @@ async function pollForNewEntries() {
                 return;
             }
             
-            // Validate essential fields
-            if (!currentEntry.licensePlate || !currentEntry.timestamp) {
-                console.error('❌ Invalid entry data - missing required fields:', currentEntry);
-                return;
-            }
-            
-            // Validate timestamp format
-            const entryTime = new Date(currentEntry.timestamp);
-            if (!(entryTime instanceof Date && !isNaN(entryTime))) {
-                console.error('❌ Invalid entry timestamp:', currentEntry.timestamp);
-                return;
-            }
-            
             // Get the last 5 minutes of entries to avoid duplicates
             const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
             const recentEntriesQuery = await db.collection('active_parking')
@@ -1126,6 +1119,14 @@ async function pollForNewEntries() {
                 console.log('🆕 New valid entry detected:', currentEntry);
                 await handleNewParkingEntry(currentEntry.licensePlate, currentEntry.timestamp);
                 showNotification(`New parking entry detected for ${currentEntry.licensePlate}`, 'success');
+                
+                // Force refresh the UI
+                const activeParkingRef = db.collection('active_parking');
+                const snapshot = await activeParkingRef
+                    .where('licensePlate', 'in', userLicensePlates)
+                    .get();
+                const entries = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                renderActiveParkingEntries(entries);
             } else {
                 console.log('⏭️ Recent entry already exists, skipping...');
             }
@@ -1134,33 +1135,18 @@ async function pollForNewEntries() {
         }
     } catch (error) {
         console.error('❌ Error polling for new entries:', error);
-        // If the error is due to server connection, try switching to alternative server
-        if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
-            console.log('🔄 Connection failed, attempting to switch servers...');
-            const currentURL = SERVER_URL;
-            let newLocation = 'LOCATION_2';
-            
-            if (currentURL === SERVER_CONFIG.LOCATION_2) {
-                newLocation = 'LOCATION_1';
-            } else if (currentURL === SERVER_CONFIG.LOCATION_1) {
-                newLocation = 'VERCEL';
-            }
-            
-            switchServerURL(newLocation);
-        }
+        showNotification('Error checking for new entries', 'error');
     }
 }
 
-// Set up polling interval
+// Set up polling interval with immediate first call
 function setupParkingListener() {
     console.log('🔄 Setting up parking entry listener...');
-    // Initialize the last processed timestamp
-    window.lastProcessedTimestamp = null;
-    // Poll every 5 seconds
+    // Poll immediately
+    pollForNewEntries();
+    // Then set up interval
     setInterval(pollForNewEntries, 5000);
     console.log('✅ Polling system initialized');
-    
-    // Show initial notification
     showNotification('Parking detection system started', 'info');
 }
 
