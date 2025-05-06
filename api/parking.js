@@ -12,12 +12,34 @@ if (!admin.apps.length) {
     });
 }
 
+// Helper function to set CORS headers
+function setCorsHeaders(res) {
+    res.setHeader('Access-Control-Allow-Credentials', true);
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS');
+    res.setHeader(
+        'Access-Control-Allow-Headers',
+        'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
+    );
+}
+
 export default async function handler(req, res) {
+    // Handle CORS preflight requests
+    if (req.method === 'OPTIONS') {
+        setCorsHeaders(res);
+        return res.status(200).end();
+    }
+
+    // Set CORS headers for all responses
+    setCorsHeaders(res);
+
     try {
         const db = admin.firestore();
         
-        // Handle different API routes
-        switch (req.query.action) {
+        // Get the action from the path instead of query
+        const action = req.query.type || 'latest-entry';
+        
+        switch (action) {
             case 'latest-entry':
                 // Get latest entry logic
                 const latestEntry = await db.collection('active_parking')

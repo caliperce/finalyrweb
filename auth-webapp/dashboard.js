@@ -43,26 +43,47 @@ const SERVER_URL = getCurrentServerURL();
 // Log the server URL for debugging
 console.log('🌐 Using server URL:', SERVER_URL);
 
+// Function to get API URL based on environment
+function getApiUrl(endpoint) {
+    const isHttps = window.location.protocol === 'https:';
+    
+    if (isHttps) {
+        // We're on Vercel, use the API routes
+        const vercelUrl = window.location.origin; // This gets the current Vercel URL
+        return `${vercelUrl}/api/parking?type=${endpoint}`;
+    }
+    
+    // We're in development, use the local server
+    return `${SERVER_URL}/${endpoint}`;
+}
+
 // Function to check server health with protocol matching
 async function checkServerHealth() {
     try {
         const isHttps = window.location.protocol === 'https:';
-        let healthEndpoint = `${SERVER_URL}/health`;
+        let healthEndpoint;
         
-        // If we're on HTTPS but trying to access local server, show warning
-        if (isHttps && SERVER_URL.startsWith('http://')) {
-            console.warn('⚠️ Cannot access local server from HTTPS. Switching to Vercel backend.');
-            healthEndpoint = 'https://finalyrweb.vercel.app/api/health';
+        if (isHttps) {
+            // We're on Vercel, use the API health check
+            healthEndpoint = `${window.location.origin}/api/health`;
+        } else {
+            // We're in development, use the local server
+            healthEndpoint = `${SERVER_URL}/health`;
         }
 
-        const response = await fetch(healthEndpoint);
+        console.log('🏥 Checking health at:', healthEndpoint);
+        
+        const response = await fetch(healthEndpoint, {
+            headers: {
+                'Cache-Control': 'no-cache',
+                'Pragma': 'no-cache'
+            }
+        });
+        
         if (!response.ok) throw new Error(`Server health check failed: ${response.status}`);
         return true;
     } catch (error) {
         console.error('❌ Server health check failed:', error);
-        if (error.message.includes('Mixed Content')) {
-            showNotification('Cannot connect to local server from HTTPS. Please use HTTP or the Vercel URL.', 'warning');
-        }
         return false;
     }
 }
@@ -1105,14 +1126,7 @@ function showNotification(message, type = 'info') {
 async function pollForNewEntries() {
     try {
         console.log('🔄 Polling for new entries...');
-        console.log('🌐 Using server URL:', SERVER_URL);
         
-        // Check server health first
-        const isServerHealthy = await checkServerHealth();
-        if (!isServerHealthy) {
-            throw new Error('Server is not responding');
-        }
-
         // Get the current user
         const user = auth.currentUser;
         if (!user) {
@@ -1132,12 +1146,13 @@ async function pollForNewEntries() {
 
         // Add cache-busting parameter and timeout
         const timestamp = new Date().getTime();
-        console.log('🔍 Fetching latest entry from:', `${SERVER_URL}/latest-entry?v=${timestamp}`);
+        const apiUrl = getApiUrl('latest-entry');
+        console.log('🔍 Fetching latest entry from:', apiUrl);
         
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
 
-        const response = await fetch(`${SERVER_URL}/latest-entry?v=${timestamp}`, {
+        const response = await fetch(`${apiUrl}?v=${timestamp}`, {
             signal: controller.signal,
             headers: {
                 'Cache-Control': 'no-cache',
