@@ -12,6 +12,7 @@ if (window.location.pathname.includes('dashboard')) {
 
 // Wait for Firebase to initialize
 let firebaseInitialized = false;
+let authInitialized = false;
 
 // Get Firebase instances after initialization
 let auth;
@@ -44,6 +45,11 @@ const timerIntervals = {};
 
 function initializeFirebase() {
     return new Promise((resolve) => {
+        if (firebaseInitialized) {
+            resolve();
+            return;
+        }
+        
         const checkFirebase = setInterval(() => {
             if (firebase.apps.length) {
                 clearInterval(checkFirebase);
@@ -55,9 +61,12 @@ function initializeFirebase() {
 }
 
 async function initializeApp() {
+    if (authInitialized) return;
+    
     await initializeFirebase();
     auth = firebase.auth();
     db = firebase.firestore();
+    authInitialized = true;
     console.log('Firebase services initialized');
 }
 
@@ -114,8 +123,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         await initializeApp();
         initializeDOMElements();
         
-        // Check authentication state
-        auth.onAuthStateChanged(async (user) => {
+        // Check authentication state only once
+        const unsubscribe = auth.onAuthStateChanged(async (user) => {
             console.log('Auth state changed:', user?.email);
             
             if (!user) {
@@ -130,7 +139,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 console.log('Updated user email display:', user.email);
             }
 
-            // Load user data
+            // Load user data only once
             try {
                 const userDoc = await db.collection('users').doc(user.uid).get();
                 if (userDoc.exists) {
@@ -152,6 +161,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                     console.log('Created new user document');
                     updateUI({ licensePlates: [] });
                 }
+                
+                // Unsubscribe from the auth state listener after initial load
+                unsubscribe();
             } catch (error) {
                 console.error('Error loading user data:', error);
                 showNotification('Error loading user data', 'error');

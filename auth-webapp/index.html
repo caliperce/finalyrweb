@@ -3,519 +3,149 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Parking Management System</title>
+    <title>Login - Parking Management System</title>
     
-    <!-- Debug logging -->
-    <script>
-        console.log('Starting application...');
-    </script>
-
-    <!-- Environment variables -->
-    <script src="/public/env-config.js"></script>
-    <script>
-        console.log('Environment loaded:', window.ENV);
-    </script>
-
-    <!-- Firebase App (the core Firebase SDK) with COMPAT version -->
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
     
-    <!-- Add Firebase products that you want to use (COMPAT versions) -->
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
-
-    <!-- Initialize Firebase -->
-    <script>
-        console.log('Initializing Firebase...');
-        try {
-            const firebaseConfig = {
-                apiKey: window.ENV.FIREBASE_API_KEY,
-                authDomain: window.ENV.FIREBASE_AUTH_DOMAIN,
-                projectId: window.ENV.FIREBASE_PROJECT_ID,
-                storageBucket: window.ENV.FIREBASE_STORAGE_BUCKET,
-                messagingSenderId: window.ENV.FIREBASE_MESSAGING_SENDER_ID,
-                appId: window.ENV.FIREBASE_APP_ID,
-                measurementId: window.ENV.FIREBASE_MEASUREMENT_ID
-            };
-            console.log('Firebase config:', firebaseConfig);
-            
-            // Initialize Firebase
-            firebase.initializeApp(firebaseConfig);
-            console.log('Firebase initialized successfully!');
-            
-            // Test Firebase auth
-            const auth = firebase.auth();
-            console.log('Firebase auth initialized:', auth);
-
-            // Check if user is already logged in
-            auth.onAuthStateChanged((user) => {
-                if (user) {
-                    console.log('👤 User already logged in, redirecting to dashboard...');
-                    window.location.replace('dashboard.html');
-                }
-            });
-        } catch (error) {
-            console.error('Error initializing Firebase:', error);
-        }
-    </script>
-
-    <!-- Make sure jQuery comes BEFORE Semantic UI -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/semantic-ui/2.4.1/semantic.min.css" rel="stylesheet">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/semantic-ui/2.4.1/semantic.min.js"></script>
-    <link href="style.css" rel="stylesheet">
+    <!-- Semantic UI -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/semantic-ui@2.4.2/dist/semantic.min.css">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/semantic-ui@2.4.2/dist/semantic.min.js"></script>
     
-    <!-- Add form switching functions -->
-    <script>
-        // Function to switch between forms
-        window.showForm = function(formId) {
-            console.log("Showing form:", formId);
-            // Hide all forms first
-            document.getElementById("login-container").style.display = 'none';
-            document.getElementById("signup-form").style.display = 'none';
-            document.getElementById("reset-password-form").style.display = 'none';
-            document.getElementById("user-profile").style.display = 'none';
-            
-            // Show the requested form
-            const formToShow = document.getElementById(formId);
-            if (formToShow) {
-                formToShow.style.display = 'block';
-                console.log("Form displayed:", formId);
-            } else {
-                console.error("Form not found:", formId);
-            }
-        };
-
-        // Function to show signup form
-        window.showSignupForm = function() {
-            window.showForm('signup-form');
-            return false;
-        };
-
-        // Function to show login form
-        window.showLoginForm = function() {
-            window.showForm('login-container');
-            return false;
-        };
-
-        // Test functions
-        function testClick() {
-            console.log("Direct click test works!");
-            return false;
-        }
-    </script>
-    <!-- Add simple test function -->
-    <script>
-        console.log("Testing if JavaScript works");
-        
-        function testShowSignup() {
-            console.log("Testing show signup form");
-            document.getElementById("login-container").style.display = "none";
-            document.getElementById("signup-form").style.display = "block";
-            return false;
-        }
-        
-        function testManualUserCreation() {
-            const email = document.getElementById("email").value || "manual-test@example.com";
-            console.log("Testing manual user creation with email:", email);
-            
-            if (window.testCreateUser) {
-                window.testCreateUser(email)
-                    .then(result => {
-                        console.log("Test result:", result);
-                        alert("Test complete! Check console for results.");
-                    })
-                    .catch(error => {
-                        console.error("Test failed:", error);
-                        alert("Test failed! Check console for details.");
-                    });
-            } else {
-                console.error("testCreateUser function not available");
-                alert("Test function not available. Make sure test.js is loaded.");
-            }
-            return false;
-        }
-    </script>
-    <!-- Firebase App Scripts - ONLY import once -->
-    <script src="firebase.js" type="module"></script>
-    <script src="app.js" type="module"></script>
-    <script src="dashboard.js" type="module"></script>
-    <script src="test.js" type="module"></script>
     <style>
         body {
+            background: linear-gradient(135deg, #1e5799 0%,#2989d8 50%,#207cca 51%,#7db9e8 100%);
+            height: 100vh;
             margin: 0;
-            padding: 0;
-            min-height: 100vh;
-            background: linear-gradient(135deg, #ffd4b8, #ffb4b4, #ffecd1, #ffd5cd);
-            background-size: 400% 400%;
-            animation: gradientBG 15s ease infinite;
-        }
-
-        @keyframes gradientBG {
-            0% {
-                background-position: 0% 50%;
-            }
-            50% {
-                background-position: 100% 50%;
-            }
-            100% {
-                background-position: 0% 50%;
-            }
-        }
-
-        .ui.container {
             display: flex;
-            justify-content: center;
             align-items: center;
-            min-height: 100vh;
-            padding: 2rem;
+            justify-content: center;
         }
-
-        .auth-form {
-            background: rgba(255, 255, 255, 0.85) !important;
-            border-radius: 20px !important;
-            box-shadow: 0 8px 32px rgba(255, 182, 193, 0.2) !important;
-            backdrop-filter: blur(10px);
-            padding: 2.5rem !important;
+        .login-container {
+            background: rgba(255, 255, 255, 0.9);
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.2);
             width: 100%;
             max-width: 400px;
-            margin: 0 auto;
-            border: 1px solid rgba(255, 255, 255, 0.3) !important;
         }
-
-        .auth-title {
-            color: #ff8e9e;
+        .login-header {
             text-align: center;
-            font-size: 2.2rem;
             margin-bottom: 2rem;
-            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.05);
-            font-weight: 300;
         }
-
-        .ui.form .field > label {
-            color: #ff9eb5 !important;
-            font-weight: 400;
-        }
-
-        .ui.primary.button {
-            background: linear-gradient(to right, #ffb4b4, #ffd5cd) !important;
-            border: none !important;
-            transition: all 0.3s ease !important;
-            color: #815b5b !important;
-            font-weight: 500 !important;
-        }
-
-        .ui.primary.button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(255, 180, 180, 0.4);
-            background: linear-gradient(to right, #ffd5cd, #ffb4b4) !important;
-        }
-
-        .ui.message {
-            background: rgba(255, 255, 255, 0.8) !important;
-            border: 1px solid rgba(255, 255, 255, 0.3) !important;
-            box-shadow: 0 4px 15px rgba(255, 182, 193, 0.1) !important;
-            border-radius: 12px !important;
-        }
-
-        .ui.error.message {
-            background: rgba(255, 228, 228, 0.9) !important;
-            border: 1px solid #ffd5d5 !important;
-        }
-
-        .ui.success.message {
-            background: rgba(235, 255, 235, 0.9) !important;
-            border: 1px solid #d5ffd5 !important;
-        }
-
-        a {
-            color: #ff8e9e !important;
-            transition: color 0.2s ease;
-            font-weight: 500;
-        }
-
-        a:hover {
-            color: #ffb4b4 !important;
-        }
-
-        .ui.stacked.segment {
-            border: none !important;
-            box-shadow: none !important;
-            background: transparent !important;
-            padding: 1rem 0;
-        }
-
-        .ui.input > input {
-            border: 2px solid rgba(255, 182, 193, 0.2) !important;
-            transition: all 0.3s ease !important;
-            border-radius: 10px !important;
-            background: rgba(255, 255, 255, 0.9) !important;
-            padding: 12px 15px !important;
-        }
-
-        .ui.input > input:focus {
-            border-color: #ffb4b4 !important;
-            background: rgba(255, 255, 255, 0.95) !important;
-            box-shadow: 0 2px 8px rgba(255, 182, 193, 0.1) !important;
-        }
-
-        .ui.left.icon.input > i.icon {
-            color: #ffb4b4;
-            opacity: 0.8;
-        }
-
-        .ui.divider {
-            border-top: 1px solid rgba(255, 182, 193, 0.2) !important;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.5) !important;
-            margin: 1.5rem 0;
-        }
-
-        .ui.basic.button {
-            box-shadow: 0 0 0 1px #ffb4b4 inset !important;
-            color: #ff8e9e !important;
-            background: transparent !important;
-            transition: all 0.3s ease !important;
-        }
-
-        .ui.basic.button:hover {
-            background: rgba(255, 180, 180, 0.1) !important;
-            box-shadow: 0 0 0 1px #ff8e9e inset !important;
-        }
-
-        .ui.pointing.label {
-            background-color: rgba(255, 228, 228, 0.9) !important;
-            border-color: #ffd5d5 !important;
-            color: #815b5b !important;
-            font-size: 0.9em;
-        }
-
-        .ui.segment.auth-form#user-profile {
-            display: none;
-            width: 80%;
-            min-height: 90vh;
-            margin: 2rem auto;
-            max-width: none;
-            background: rgba(255, 255, 255, 0.85) !important;
-            border-radius: 20px !important;
-            box-shadow: 0 8px 32px rgba(255, 182, 193, 0.2) !important;
-            backdrop-filter: blur(10px);
-        }
-
-        #user-profile .ui.card {
-            background: transparent !important;
-            box-shadow: none !important;
-            padding: 2rem !important;
-            height: calc(90vh - 100px);
+        .login-header h2 {
+            color: #2c3e50;
             margin: 0;
-            border: none !important;
         }
-
-        #user-profile .header {
-            color: #ff8e9e !important;
-            font-size: 2.2rem !important;
-            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.05);
+        .login-form {
+            margin-top: 1rem;
         }
-
-        #user-profile .meta {
-            color: #815b5b !important;
+        .error-message {
+            color: #e74c3c;
+            margin-top: 1rem;
+            text-align: center;
+            display: none;
         }
-
-        #user-profile .ui.dividing.header {
-            border-bottom: 2px solid rgba(255, 182, 193, 0.2);
-            color: #ff8e9e;
-            padding-bottom: 1rem;
-        }
-
-        #license-plate-list {
-            background: rgba(255, 255, 255, 0.5);
-            border-radius: 15px;
-            padding: 1.5rem !important;
-            box-shadow: 0 4px 15px rgba(255, 182, 193, 0.1);
-        }
-
-        #add-license-form {
-            background: rgba(255, 255, 255, 0.5);
-            border-radius: 15px;
-            padding: 2rem !important;
-            margin-top: 2rem !important;
-            box-shadow: 0 4px 15px rgba(255, 182, 193, 0.1);
-        }
-
-        #add-license-form label {
-            color: #ff8e9e !important;
-        }
-
-        #add-license-form input {
-            border: 2px solid rgba(255, 182, 193, 0.2) !important;
-            border-radius: 10px !important;
-            background: rgba(255, 255, 255, 0.9) !important;
-        }
-
-        #add-license-form input:focus {
-            border-color: #ffb4b4 !important;
-            box-shadow: 0 2px 8px rgba(255, 182, 193, 0.1) !important;
-        }
-
-        #user-profile .ui.primary.button {
-            background: linear-gradient(to right, #ffb4b4, #ffd5cd) !important;
-            color: #815b5b !important;
-            border: none !important;
-            transition: all 0.3s ease !important;
-        }
-
-        #user-profile .ui.primary.button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(255, 180, 180, 0.4);
-            background: linear-gradient(to right, #ffd5cd, #ffb4b4) !important;
-        }
-
-        #user-profile .extra.content {
-            background: transparent !important;
-            border-top: 2px solid rgba(255, 182, 193, 0.2) !important;
+        .loading {
+            display: none;
         }
     </style>
 </head>
 <body>
-    <section class="ui container" id="main-view">
-        <!-- Login form -->
-        <div class="ui segment grey auth-form" id="login-container">
-            <h2 class="auth-title">Welcome Back!</h2>
-            <form class="ui form" id="login-form">
-                <div class="ui stacked segment">
-                    <div class="ui error message" id="login-error-message"></div>
-                    <div class="field">
-                        <div class="ui left icon input">
-                            <i class="mail icon"></i>
-                            <input type="email" name="email" id="login-email" placeholder="Email" required>
-                        </div>
-                    </div>
-                    <div class="field">
-                        <div class="ui left icon input">
-                            <i class="lock icon"></i>
-                            <input type="password" name="password" id="login-password" placeholder="Password" required>
-                        </div>
-                    </div>
-                    <button type="submit" class="ui fluid large primary submit button" id="Login">
-                        <i class="sign-in icon"></i>
-                        Login
-                    </button>
-                    <div class="ui divider"></div>
-                    <a id="forgot-password-btn" class="ui basic fluid button">Forgot Password?</a>
-                </div>
-            </form>
-            <div class="ui message">
-                New to us? <a id="need-an-account-btn" href="#" onclick="showSignupForm(); return false;">Sign up</a>
+    <div class="login-container">
+        <div class="login-header">
+            <h2>Parking Management System</h2>
+            <p>Please sign in to continue</p>
+        </div>
+        
+        <form class="ui form login-form" id="login-form">
+            <div class="field">
+                <label>Email</label>
+                <input type="email" id="email" placeholder="Enter your email" required>
             </div>
-        </div>
-
-        <!-- Signup form -->
-        <div class="ui segment grey auth-form" id="signup-form" style="display: none;">
-            <h2 class="auth-title">Create an Account</h2>
-            <form class="ui form">
-                <div class="ui stacked segment">
-                    <div class="ui error message" id="error"></div>
-                    
-                    <div class="field">
-                        <div class="ui left icon input">
-                            <i class="mail icon"></i>
-                            <input type="email" name="email" id="email" placeholder="Email">
-                        </div>
-                    </div>
-
-                    <div class="field">
-                        <div class="ui left icon input">
-                            <i class="car icon"></i>
-                            <input type="text" name="license" id="license" placeholder="License Plate Number">
-                        </div>
-                        <div class="ui pointing label" id="licenseHint" style="display: none;">
-                            Please enter a valid license plate number
-                        </div>
-                    </div>
-
-                    <div class="field">
-                        <div class="ui left icon input">
-                            <i class="lock icon"></i>
-                            <input type="password" name="password" id="password" placeholder="Password">
-                        </div>
-                    </div>
-
-                    <button class="ui fluid large primary submit button" id="Signup" onclick="handleSignup(event);">Sign Up</button>
-                    
-                    <!-- Add test button for debugging -->
-                    <div style="margin-top: 15px;">
-                        <button class="ui fluid small button" style="background-color: #f0f0f0;" onclick="console.log('Simple test button clicked'); alert('Test button clicked - JavaScript is working!');">
-                            Test JavaScript
-                        </button>
-                        <div style="font-size: 0.8em; color: #888; margin-top: 5px; text-align: center;">
-                            Click to test if JavaScript is working properly
-                        </div>
-                    </div>
-                </div>
-            </form>
-            <div class="ui message">
-                Already have an account? <a id="have-an-account-btn" href="#" onclick="showLoginForm(); return false;">Login</a>
+            <div class="field">
+                <label>Password</label>
+                <input type="password" id="password" placeholder="Enter your password" required>
             </div>
+            <button class="ui primary fluid button" type="submit">
+                <span class="normal-text">Sign In</span>
+                <span class="loading">
+                    <i class="spinner loading icon"></i> Signing In...
+                </span>
+            </button>
+        </form>
+        
+        <div class="error-message" id="error-message"></div>
+        
+        <div class="ui divider"></div>
+        
+        <div style="text-align: center;">
+            <a href="register.html">Create an account</a>
+            <span style="margin: 0 10px;">|</span>
+            <a href="forgot-password.html">Forgot password?</a>
         </div>
-        <!-- Password Reset Form -->
-        <div class="ui segment auth-form" id="reset-password-form" style="display: none;">
-            <h2 class="auth-title">Reset Password</h2>
-            <div class="ui message hidden" id="rp-message"></div>
-            <form class="ui form">
-                <div class="ui stacked segment">
-                    <div class="field">
-                        <div class="ui left icon input">
-                            <i class="mail icon"></i>
-                            <input type="email" placeholder="Email" id="reset-password-email"/>
-                        </div>
-                    </div>
-                    <button class="ui fluid large primary button" id="reset-password-btn">Reset Password</button>
-                    <div class="ui divider"></div>
-                    <button class="ui fluid basic button" id="back-to-login">Back to Login</button>
-                </div>
-            </form>
-        </div>
-        <!-- User Profile View -->
-        <div class="ui segment auth-form" id="user-profile" style="display: none; width: 80%; min-height: 90vh; margin: 2rem auto; max-width: none;">
-            <h2 class="auth-title" style="font-size: 2.5rem; margin: 2rem 0; text-align: center;">User Profile</h2>
-            <div class="ui card fluid" style="padding: 3rem 5rem; height: calc(90vh - 100px); margin: 0; border-radius: 10px; box-shadow: 0 2px 15px rgba(0,0,0,0.1);">
-                <div class="content" style="height: 100%; display: flex; flex-direction: column;">
-                    <div style="margin-bottom: 3rem;">
-                        <div class="header" style="font-size: 2rem; margin-bottom: 1.5rem;">Welcome!</div>
-                        <div class="meta" style="font-size: 1.4rem;">
-                            <span id="user-email"></span>
-                        </div>
-                    </div>
-                    
-                    <!-- License Plate Management Section -->
-                    <div class="license-plate-section" style="flex: 1; display: flex; flex-direction: column;">
-                        <h3 class="ui dividing header" style="font-size: 1.8rem; margin-bottom: 2rem;">Your License Plates</h3>
-                        <div class="ui list" id="license-plate-list" style="flex: 1; margin-bottom: 2rem; min-height: 200px; padding: 1rem;">
-                            <!-- License plates will be displayed here -->
-                        </div>
-                        
-                        <!-- Add License Plate Form -->
-                        <div class="ui form" id="add-license-form" style="margin-top: auto; padding: 2rem 0;">
-                            <div class="field">
-                                <label style="font-size: 1.4rem; margin-bottom: 1rem;">Add License Plate</label>
-                                <div class="ui action input" style="width: 100%;">
-                                    <input type="text" id="new-license-plate" placeholder="Enter license plate number" style="font-size: 1.2rem; padding: 1rem;">
-                                    <button class="ui primary button" id="add-license-btn" style="font-size: 1.2rem; padding: 1rem 2rem;">Add</button>
-                                </div>
-                            </div>
-                            <div class="ui message error" id="license-error" style="display: none; margin-top: 1rem;"></div>
-                        </div>
-                    </div>
-                </div>
-                <div class="extra content" style="margin-top: 2rem; padding-top: 2rem; border-top: 1px solid rgba(0,0,0,0.1);">
-                    <button class="ui primary button fluid" id="Logout" style="font-size: 1.3rem; padding: 1.2rem;">Logout</button>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Success Message -->
-    <div class="ui success message" id="successMessage" style="display: none;">
-        <div class="header">Success!</div>
-        <p>Your account has been created successfully.</p>
     </div>
+
+    <script>
+        // Initialize Firebase
+        const firebaseConfig = {
+            apiKey: "AIzaSyB-WA4jwLiy3BoabtKTNC2LYJfweibqI4",
+            authDomain: "userinfo-10027.firebaseapp.com",
+            projectId: "userinfo-10027",
+            storageBucket: "userinfo-10027.firebasestorage.app",
+            messagingSenderId: "605892604762",
+            appId: "1:605892604762:web:e4e6f1231f144e2e983963",
+            measurementId: "G-HVKGHKRG39"
+        };
+        
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        }
+        
+        const auth = firebase.auth();
+        let redirectInProgress = false;
+
+        // Check if user is already signed in
+        auth.onAuthStateChanged((user) => {
+            if (user && !redirectInProgress) {
+                redirectInProgress = true;
+                console.log('User already signed in, redirecting to dashboard...');
+                setTimeout(() => {
+                    window.location.replace('dashboard.html');
+                }, 1000);
+            }
+        });
+
+        // Handle login form submission
+        document.getElementById('login-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const errorMessage = document.getElementById('error-message');
+            const form = e.target;
+            
+            // Show loading state
+            form.classList.add('loading');
+            errorMessage.style.display = 'none';
+            
+            try {
+                await auth.signInWithEmailAndPassword(email, password);
+                console.log('Login successful');
+                // Redirect will be handled by onAuthStateChanged
+            } catch (error) {
+                console.error('Login error:', error);
+                errorMessage.textContent = error.message;
+                errorMessage.style.display = 'block';
+                form.classList.remove('loading');
+            }
+        });
+    </script>
+    
+    <!-- Include the auth.js file -->
+    <script src="auth.js"></script>
 </body>
 </html> 
