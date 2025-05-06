@@ -12,11 +12,19 @@ const SERVER_CONFIG = {
 
 // Function to get the current server URL from localStorage or default
 function getCurrentServerURL() {
-    // Try to get from localStorage first
+    // Check if we're running on HTTPS (Vercel)
+    const isHttps = window.location.protocol === 'https:';
+    
+    // If we're on HTTPS, we need to use the Vercel backend
+    if (isHttps) {
+        return 'https://finalyrweb.vercel.app/api';  // Use Vercel's API routes
+    }
+    
+    // For local development (HTTP)
     const savedURL = localStorage.getItem('SERVER_URL');
     if (savedURL) return savedURL;
 
-    // If no saved URL, try to auto-detect based on window location
+    // Auto-detect based on hostname
     const hostname = window.location.hostname;
     if (hostname.includes('192.168.90')) {
         return SERVER_CONFIG.LOCATION_1;  // College
@@ -26,8 +34,7 @@ function getCurrentServerURL() {
         return SERVER_CONFIG.LOCAL;       // Local
     }
     
-    // Default to LOCATION_2 if can't determine
-    return SERVER_CONFIG.LOCATION_2;
+    return SERVER_CONFIG.LOCATION_2;  // Default
 }
 
 // Use the server URL from localStorage or auto-detect
@@ -36,14 +43,26 @@ const SERVER_URL = getCurrentServerURL();
 // Log the server URL for debugging
 console.log('🌐 Using server URL:', SERVER_URL);
 
-// Function to check server health
+// Function to check server health with protocol matching
 async function checkServerHealth() {
     try {
-        const response = await fetch(`${SERVER_URL}/health`);
+        const isHttps = window.location.protocol === 'https:';
+        let healthEndpoint = `${SERVER_URL}/health`;
+        
+        // If we're on HTTPS but trying to access local server, show warning
+        if (isHttps && SERVER_URL.startsWith('http://')) {
+            console.warn('⚠️ Cannot access local server from HTTPS. Switching to Vercel backend.');
+            healthEndpoint = 'https://finalyrweb.vercel.app/api/health';
+        }
+
+        const response = await fetch(healthEndpoint);
         if (!response.ok) throw new Error(`Server health check failed: ${response.status}`);
         return true;
     } catch (error) {
         console.error('❌ Server health check failed:', error);
+        if (error.message.includes('Mixed Content')) {
+            showNotification('Cannot connect to local server from HTTPS. Please use HTTP or the Vercel URL.', 'warning');
+        }
         return false;
     }
 }
