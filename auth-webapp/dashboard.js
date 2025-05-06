@@ -2,60 +2,33 @@
 const auth = firebase.auth();
 const db = firebase.firestore();
 
+// Server Configuration
+const SERVER_CONFIG = {
+    LOCAL: 'http://localhost:3001',            // Local testing
+    HOME: 'http://192.168.0.123:3001',        // Home network
+    COLLEGE: 'http://192.168.90.127:3001'     // College network
+};
+
 // Function to get the current server URL from localStorage or default
 function getCurrentServerURL() {
     // Try to get from localStorage first
     const savedURL = localStorage.getItem('SERVER_URL');
     if (savedURL) return savedURL;
-
-    // Auto-detect based on hostname
-    const hostname = window.location.hostname;
-    if (hostname.includes('192.168.90')) {
-        return SERVER_CONFIG.LOCATION_1;  // College
-    } else if (hostname.includes('192.168.0')) {
-        return SERVER_CONFIG.LOCATION_2;  // Home
-    } else if (hostname === 'localhost') {
-        return SERVER_CONFIG.LOCAL;       // Local
-    }
     
-    // If on Vercel or can't determine, use home server
-    return SERVER_CONFIG.VERCEL;
+    // Default to localhost
+    return SERVER_CONFIG.LOCAL;
 }
-
-// Use the server URL from localStorage or auto-detect
-const SERVER_URL = getCurrentServerURL();
-
-// Log the server URL for debugging
-console.log('🌐 Using server URL:', SERVER_URL);
 
 // Function to get API URL based on environment
 function getApiUrl(endpoint) {
-    const isHttps = window.location.protocol === 'https:';
-    
-    if (isHttps) {
-        // We're on Vercel, use the API routes
-        const vercelUrl = window.location.origin; // This gets the current Vercel URL
-        return `${vercelUrl}/api/parking`;  // Remove the type from URL, will add as query param
-    }
-    
-    // We're in development, use the local server
-    return `${SERVER_URL}/${endpoint}`;
+    const serverUrl = getCurrentServerURL();
+    return `${serverUrl}/${endpoint}`;
 }
 
-// Function to check server health with protocol matching
+// Function to check server health
 async function checkServerHealth() {
     try {
-        const isHttps = window.location.protocol === 'https:';
-        let healthEndpoint;
-        
-        if (isHttps) {
-            // We're on Vercel, use the API health check
-            healthEndpoint = `${window.location.origin}/api/health`;
-        } else {
-            // We're in development, use the local server
-            healthEndpoint = `${SERVER_URL}/health`;
-        }
-
+        const healthEndpoint = `${getCurrentServerURL()}/health`;
         console.log('🏥 Checking health at:', healthEndpoint);
         
         const response = await fetch(healthEndpoint, {
@@ -76,6 +49,35 @@ async function checkServerHealth() {
 document.addEventListener('DOMContentLoaded', () => {
     console.log('Dashboard loaded, checking auth state...');
     
+    // Initialize polling systems
+    setupParkingListener();
+    setupExitListener();
+    
+    // Initialize server location dropdown
+    const serverLocationSelect = document.getElementById('server-location');
+    if (serverLocationSelect) {
+        // Set initial value based on current server
+        const currentURL = getCurrentServerURL();
+        for (const [key, value] of Object.entries(SERVER_CONFIG)) {
+            if (value === currentURL) {
+                serverLocationSelect.value = key;
+                break;
+            }
+        }
+
+        // Add change event listener
+        serverLocationSelect.addEventListener('change', (e) => {
+            const newLocation = e.target.value;
+            const newUrl = SERVER_CONFIG[newLocation];
+            localStorage.setItem('SERVER_URL', newUrl);
+            console.log('Switched server to:', newUrl);
+            showNotification('Server location updated', 'info');
+            // Restart polling with new URL
+            setupParkingListener();
+            setupExitListener();
+        });
+    }
+
     // Get DOM elements
     const userEmailElement = document.getElementById('user-email');
     const licensePlateList = document.getElementById('license-plate-list');
@@ -1096,6 +1098,99 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Set interval to update timer every second
         timerIntervals[entryId] = setInterval(updateTimer, 1000);
+    }
+
+    // Function to set up parking entry polling
+    function setupParkingListener() {
+        console.log('🔄 Setting up parking entry listener...');
+        // Initialize the last processed timestamp
+        window.lastProcessedTimestamp = null;
+        // Poll every 5 seconds
+        window.parkingInterval = setInterval(pollForNewEntries, 5000);
+        console.log('✅ Polling system initialized');
+        
+        // Show initial notification
+        showNotification('Parking detection system started', 'info');
+    }
+
+    // Function to set up exit polling
+    function setupExitListener() {
+        console.log('🔄 Setting up exit detection listener...');
+        // Initialize the last processed exit timestamp
+        window.lastProcessedExitTimestamp = null;
+        // Poll every 5 seconds
+        window.exitInterval = setInterval(pollForExits, 5000);
+        console.log('✅ Exit polling system initialized');
+    }
+
+    // Function to poll for new entries
+    async function pollForNewEntries() {
+        try {
+            console.log('🔄 Polling for new entries...');
+            const timestamp = new Date().getTime();
+            const response = await fetch(`${getCurrentServerURL()}/latest-entry?v=${timestamp}`, {
+                headers: {
+                    'Cache-Control': 'no-cache',
+                    'Pragma': 'no-cache'
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const result = await response.json();
+            console.log('📥 Received entry response:', result);
+
+            if (result.success && result.data && result.data.licensePlate) {
+                const currentEntry = result.data;
+                
+                if (!window.lastProcessedTimestamp || window.lastProcessedTimestamp !== currentEntry.timestamp) {
+                    console.log('🆕 New entry detected:', currentEntry);
+                    await handleNewParkingEntry(currentEntry.licensePlate, currentEntry.timestamp);
+                    window.lastProcessedTimestamp = currentEntry.timestamp;
+                } else {
+                    console.log('⏭️ Entry already processed, skipping...');
+                }
+            }
+        } catch (error) {
+            console.error('❌ Error polling for entries:', error);
+        }
+    }
+
+    // Function to poll for vehicle exits
+    async function pollForExits() {
+        try {
+            console.log('🔄 Polling for vehicle exits...');
+            const timestamp = new Date().getTime();
+            const response = await fetch(`${getCurrentServerURL()}/latest-exit?v=${timestamp}`, {
+                headers: {
+                    'Cache-Control': 'no-cache',
+                    'Pragma': 'no-cache'
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const result = await response.json();
+            console.log('📥 Received exit response:', result);
+
+            if (result.success && result.data && result.data.licensePlate) {
+                const currentExit = result.data;
+                
+                if (!window.lastProcessedExitTimestamp || window.lastProcessedExitTimestamp !== currentExit.exitTimestamp) {
+                    console.log('🆕 New exit detected:', currentExit);
+                    await handleVehicleExit(currentExit.licensePlate, currentExit.exitTimestamp);
+                    window.lastProcessedExitTimestamp = currentExit.exitTimestamp;
+                } else {
+                    console.log('⏭️ Exit already processed, skipping...');
+                }
+            }
+        } catch (error) {
+            console.error('❌ Error polling for exits:', error);
+        }
     }
 });
 
