@@ -2,14 +2,6 @@
 const auth = firebase.auth();
 const db = firebase.firestore();
 
-// Server Configuration
-const SERVER_CONFIG = {
-    LOCATION_1: 'http://192.168.90.127:3001',  // College
-    LOCATION_2: 'http://192.168.0.123:3001',   // Home
-    LOCAL: 'http://localhost:3001',            // Local testing
-    VERCEL: 'http://192.168.0.123:3001'        // When deployed, use home server
-};
-
 // Function to get the current server URL from localStorage or default
 function getCurrentServerURL() {
     // Try to get from localStorage first
@@ -83,29 +75,6 @@ async function checkServerHealth() {
 
 document.addEventListener('DOMContentLoaded', () => {
     console.log('Dashboard loaded, checking auth state...');
-    
-    // Initialize polling systems
-    setupParkingListener();
-    setupExitListener();
-    
-    // Initialize server location dropdown
-    const serverLocationSelect = document.getElementById('server-location');
-    if (serverLocationSelect) {
-        // Set initial value based on current server
-        const currentURL = getCurrentServerURL();
-        for (const [key, value] of Object.entries(SERVER_CONFIG)) {
-            if (value === currentURL) {
-                serverLocationSelect.value = key;
-                break;
-            }
-        }
-
-        // Add change event listener
-        serverLocationSelect.addEventListener('change', (e) => {
-            const newLocation = e.target.value;
-            switchServerURL(newLocation);
-        });
-    }
     
     // Get DOM elements
     const userEmailElement = document.getElementById('user-email');
@@ -292,10 +261,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Check authentication state
+    // Update the auth state change handler
     auth.onAuthStateChanged(async (user) => {
-        console.log('Auth state changed:', user?.email);
-        
         if (!user) {
             console.log('No user found, redirecting to login...');
             window.location.replace('index.html');
@@ -308,23 +275,24 @@ document.addEventListener('DOMContentLoaded', () => {
             console.log('Updated user email display');
         }
 
-        // Load user data
+        // Check for phone number and show modal if needed
+        await checkAndCollectPhoneNumber(user);
+        
+        // Load user data and start Firebase listeners
         try {
             const userDoc = await db.collection('users').doc(user.uid).get();
             if (userDoc.exists) {
                 const userData = userDoc.data();
                 console.log('User data loaded:', userData);
                 updateUI(userData);
+                
+                // Start the Firebase real-time listener for parking
+                parkingManager.setupActiveParkingMonitor();
             } else {
                 console.log('No user document found');
             }
         } catch (error) {
             console.error('Error loading user data:', error);
-        }
-
-        // Initialize the parking monitor when auth state changes
-        if (user) {
-            parkingManager.setupActiveParkingMonitor();
         }
     });
 
@@ -533,180 +501,197 @@ document.addEventListener('DOMContentLoaded', () => {
         },
 
         validateParkingEntries(entries) {
-            if (!entries || !Array.isArray(entries)) {
-                console.error('Invalid entries data:', entries);
-                return [];
-            }
-            
-            return entries.filter(entry => {
-                try {
-                    const data = entry.data();
-                    
-                    // Check if required fields exist and are valid
-                    if (!data) {
-                        console.error('Entry has no data', entry.id);
-                        return false;
-                    }
-                    
-                    if (!data.licensePlate) {
-                        console.error('Entry missing license plate', entry.id);
-                        return false;
-                    }
-                    
-                    if (!data.entryTimestamp) {
-                        console.error('Entry missing timestamp', entry.id);
-                        return false;
-                    }
-                    
-                    // Validate that timestamp is a valid date
-                    const entryTime = new Date(data.entryTimestamp);
-                    if (!(entryTime instanceof Date && !isNaN(entryTime))) {
-                        console.error('Entry has invalid timestamp', data.entryTimestamp);
-                        return false;
-                    }
-                    
-                    // Validate status - accept all valid status values
-                    const validStatuses = ['active', 'pending_payment', 'completed'];
-                    if (!data.status || !validStatuses.includes(data.status)) {
-                        console.error('Entry has invalid status', data.status);
-                        return false;
-                    }
-                    
-                    // For entries with exitTimestamp, validate it
-                    if (data.exitTimestamp) {
-                        const exitTime = new Date(data.exitTimestamp);
-                        if (!(exitTime instanceof Date && !isNaN(exitTime))) {
-                            console.error('Entry has invalid exit timestamp', data.exitTimestamp);
-                            return false;
-                        }
-                    }
-                    
-                    return true;
-                } catch (error) {
-                    console.error('Error validating entry:', error);
+        if (!entries || !Array.isArray(entries)) {
+            console.error('Invalid entries data:', entries);
+            return [];
+        }
+        
+        return entries.filter(entry => {
+            try {
+                const data = entry.data();
+                
+                // Check if required fields exist and are valid
+                if (!data) {
+                    console.error('Entry has no data', entry.id);
                     return false;
                 }
-            });
+                
+                if (!data.licensePlate) {
+                    console.error('Entry missing license plate', entry.id);
+                    return false;
+                }
+                
+                if (!data.entryTimestamp) {
+                    console.error('Entry missing timestamp', entry.id);
+                    return false;
+                }
+                
+                // Validate that timestamp is a valid date
+                const entryTime = new Date(data.entryTimestamp);
+                if (!(entryTime instanceof Date && !isNaN(entryTime))) {
+                    console.error('Entry has invalid timestamp', data.entryTimestamp);
+                    return false;
+                }
+                
+                // Validate status - accept all valid status values
+                const validStatuses = ['active', 'pending_payment', 'completed'];
+                if (!data.status || !validStatuses.includes(data.status)) {
+                    console.error('Entry has invalid status', data.status);
+                    return false;
+                }
+                
+                // For entries with exitTimestamp, validate it
+                if (data.exitTimestamp) {
+                    const exitTime = new Date(data.exitTimestamp);
+                    if (!(exitTime instanceof Date && !isNaN(exitTime))) {
+                        console.error('Entry has invalid exit timestamp', data.exitTimestamp);
+                        return false;
+                    }
+                }
+                
+                return true;
+            } catch (error) {
+                console.error('Error validating entry:', error);
+                return false;
+            }
+        });
         },
 
         renderActiveParkingEntries(entries) {
-            console.log('Rendering active parking entries:', entries.length);
-            
-            if (!entries || entries.length === 0) {
-                noActiveParkingElement.style.display = 'block';
-                activeParkingList.innerHTML = '';
-                activeParkingList.appendChild(noActiveParkingElement);
-                pendingPaymentsSection.style.display = 'none';
-                pendingPaymentsList.innerHTML = '';
-                return;
-            }
-            
-            noActiveParkingElement.style.display = 'none';
+        console.log('Rendering active parking entries:', entries.length);
+        
+        if (!entries || entries.length === 0) {
+            noActiveParkingElement.style.display = 'block';
             activeParkingList.innerHTML = '';
+            activeParkingList.appendChild(noActiveParkingElement);
+            pendingPaymentsSection.style.display = 'none';
             pendingPaymentsList.innerHTML = '';
+            return;
+        }
+        
+        noActiveParkingElement.style.display = 'none';
+        activeParkingList.innerHTML = '';
+        pendingPaymentsList.innerHTML = '';
+        
+        // Filter entries: Only show active and pending_payment entries in the main display
+        const displayableEntries = entries.filter(entry => entry.data().status !== 'completed');
+        
+        // Show "no active parking" if all entries are completed
+        if (displayableEntries.length === 0) {
+            noActiveParkingElement.style.display = 'block';
+            activeParkingList.appendChild(noActiveParkingElement);
+            pendingPaymentsSection.style.display = 'none';
+            return;
+        }
+        
+        // Sort entries: payment required first, then active
+        const sortedEntries = [...displayableEntries].sort((a, b) => {
+            const statusA = a.data().status;
+            const statusB = b.data().status;
             
-            // Filter entries: Only show active and pending_payment entries in the main display
-            const displayableEntries = entries.filter(entry => entry.data().status !== 'completed');
+            // Order: 1. pending_payment, 2. active
+            if (statusA === 'pending_payment' && statusB !== 'pending_payment') return -1;
+            if (statusA !== 'pending_payment' && statusB === 'pending_payment') return 1;
             
-            // Show "no active parking" if all entries are completed
-            if (displayableEntries.length === 0) {
-                noActiveParkingElement.style.display = 'block';
-                activeParkingList.appendChild(noActiveParkingElement);
-                pendingPaymentsSection.style.display = 'none';
-                return;
-            }
+            return 0;
+        });
+        
+        // Filter entries for pending payments
+        const pendingPaymentEntries = sortedEntries.filter(entry => entry.data().status === 'pending_payment');
+        
+        // Show or hide pending payments section
+        if (pendingPaymentEntries.length > 0) {
+            pendingPaymentsSection.style.display = 'block';
             
-            // Sort entries: payment required first, then active
-            const sortedEntries = [...displayableEntries].sort((a, b) => {
-                const statusA = a.data().status;
-                const statusB = b.data().status;
-                
-                // Order: 1. pending_payment, 2. active
-                if (statusA === 'pending_payment' && statusB !== 'pending_payment') return -1;
-                if (statusA !== 'pending_payment' && statusB === 'pending_payment') return 1;
-                
-                return 0;
-            });
-            
-            // Filter entries for pending payments
-            const pendingPaymentEntries = sortedEntries.filter(entry => entry.data().status === 'pending_payment');
-            
-            // Show or hide pending payments section
-            if (pendingPaymentEntries.length > 0) {
-                pendingPaymentsSection.style.display = 'block';
-                
-                // Render pending payment entries
-                pendingPaymentEntries.forEach(entry => {
-                    try {
-                        const data = entry.data();
-                        const entryId = entry.id;
-                        const entryTime = new Date(data.entryTimestamp);
-                        const exitTime = new Date(data.exitTimestamp);
-                        
-                        const formattedEntryTime = entryTime.toLocaleString('en-US', {
-                            month: 'short',
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                        });
-                        
-                        const formattedExitTime = exitTime.toLocaleString('en-US', {
-                            month: 'short',
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                        });
-                        
-                        const pendingPaymentElement = document.createElement('div');
-                        pendingPaymentElement.className = 'ui segment';
-                        pendingPaymentElement.style.borderLeft = '4px solid #f39c12';
-                        pendingPaymentElement.style.background = 'rgba(255, 255, 255, 0.7)';
-                        pendingPaymentElement.style.marginBottom = '15px';
-                        
-                        pendingPaymentElement.innerHTML = `
-                            <div class="ui grid">
-                                <div class="ten wide column">
-                                    <div class="ui orange text" style="font-weight: bold;">${data.licensePlate}</div>
-                                    <div>Entry: ${formattedEntryTime} • Exit: ${formattedExitTime}</div>
-                                    <div>Duration: ${data.parkingDuration} • Fee: $${data.parkingFee.toFixed(2)}</div>
-                                </div>
-                                <div class="six wide column" style="display: flex; align-items: center; justify-content: flex-end;">
-                                    <button class="ui orange button pay-button" data-id="${entryId}">
-                                        <i class="credit card icon"></i>
-                                        Pay Now
-                                    </button>
-                                </div>
-                            </div>
-                        `;
-                        
-                        pendingPaymentsList.appendChild(pendingPaymentElement);
-                        
-                        // Add event listener for payment button
-                        const payButton = pendingPaymentElement.querySelector('.pay-button');
-                        payButton.addEventListener('click', async () => {
-                            const parkingId = payButton.getAttribute('data-id');
-                            
-                            // Store the parking ID for payment processing
-                            currentPaymentParkingId = parkingId;
-                            
-                            // Open the payment modal
-                            $(paymentModal).modal('show');
-                        });
-                    } catch (error) {
-                        console.error('Error rendering pending payment entry:', error);
-                    }
-                });
-            } else {
-                pendingPaymentsSection.style.display = 'none';
-            }
-            
-            // Render all entries in the main list
-            sortedEntries.forEach(entry => {
+            // Render pending payment entries
+            pendingPaymentEntries.forEach(entry => {
                 try {
                     const data = entry.data();
                     const entryId = entry.id;
                     const entryTime = new Date(data.entryTimestamp);
+                    const exitTime = new Date(data.exitTimestamp);
+                    
                     const formattedEntryTime = entryTime.toLocaleString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
+                    
+                    const formattedExitTime = exitTime.toLocaleString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
+                    
+                    const pendingPaymentElement = document.createElement('div');
+                    pendingPaymentElement.className = 'ui segment';
+                    pendingPaymentElement.style.borderLeft = '4px solid #f39c12';
+                    pendingPaymentElement.style.background = 'rgba(255, 255, 255, 0.7)';
+                    pendingPaymentElement.style.marginBottom = '15px';
+                    
+                    pendingPaymentElement.innerHTML = `
+                        <div class="ui grid">
+                            <div class="ten wide column">
+                                <div class="ui orange text" style="font-weight: bold;">${data.licensePlate}</div>
+                                <div>Entry: ${formattedEntryTime} • Exit: ${formattedExitTime}</div>
+                                <div>Duration: ${data.parkingDuration} • Fee: $${data.parkingFee.toFixed(2)}</div>
+                            </div>
+                            <div class="six wide column" style="display: flex; align-items: center; justify-content: flex-end;">
+                                <button class="ui orange button pay-button" data-id="${entryId}">
+                                    <i class="credit card icon"></i>
+                                    Pay Now
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                    
+                    pendingPaymentsList.appendChild(pendingPaymentElement);
+                    
+                    // Add event listener for payment button
+                    const payButton = pendingPaymentElement.querySelector('.pay-button');
+                    payButton.addEventListener('click', async () => {
+                        const parkingId = payButton.getAttribute('data-id');
+                        
+                        // Store the parking ID for payment processing
+                        currentPaymentParkingId = parkingId;
+                        
+                        // Open the payment modal
+                        $(paymentModal).modal('show');
+                    });
+                } catch (error) {
+                    console.error('Error rendering pending payment entry:', error);
+                }
+            });
+        } else {
+            pendingPaymentsSection.style.display = 'none';
+        }
+        
+        // Render all entries in the main list
+        sortedEntries.forEach(entry => {
+            try {
+                const data = entry.data();
+                const entryId = entry.id;
+                const entryTime = new Date(data.entryTimestamp);
+                const formattedEntryTime = entryTime.toLocaleString('en-US', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit'
+                });
+                
+                // Create base entry element
+                const entryElement = document.createElement('div');
+                entryElement.className = 'ui segment active-parking-item';
+                
+                // Different UI based on status
+                if (data.status === 'pending_payment') {
+                    // Payment required UI
+                    const exitTime = new Date(data.exitTimestamp);
+                    const formattedExitTime = exitTime.toLocaleString('en-US', {
                         year: 'numeric',
                         month: 'short',
                         day: 'numeric',
@@ -715,150 +700,133 @@ document.addEventListener('DOMContentLoaded', () => {
                         second: '2-digit'
                     });
                     
-                    // Create base entry element
-                    const entryElement = document.createElement('div');
-                    entryElement.className = 'ui segment active-parking-item';
-                    
-                    // Different UI based on status
-                    if (data.status === 'pending_payment') {
-                        // Payment required UI
-                        const exitTime = new Date(data.exitTimestamp);
-                        const formattedExitTime = exitTime.toLocaleString('en-US', {
-                            year: 'numeric',
-                            month: 'short',
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                            second: '2-digit'
-                        });
-                        
-                        entryElement.style.borderLeft = '4px solid #f39c12';
-                        entryElement.innerHTML = `
-                            <div class="ui orange ribbon label">
-                                <i class="money bill alternate icon"></i> Payment Required
-                            </div>
-                            <div class="ui grid" style="margin-top: 1.5rem;">
-                                <div class="twelve wide column">
-                                    <h3 class="ui header">
-                                        <i class="car icon"></i>
-                                            <div class="content">
-                                            ${data.licensePlate}
-                                            <div class="sub header">Entry: ${formattedEntryTime}</div>
-                                            <div class="sub header">Exit: ${formattedExitTime}</div>
-                                            <div class="sub header">Duration: ${data.parkingDuration}</div>
-                                            <div class="sub header">Fee: $${data.parkingFee.toFixed(2)}</div>
-                                            <div class="sub header" id="status-${entryId}">Status: <span class="ui orange text">Awaiting Payment</span></div>
-                                        </div>
-                                    </h3>
-                                </div>
-                                <div class="four wide column" style="display: flex; align-items: center; justify-content: center;">
-                                    <button class="ui orange button pay-button" data-id="${entryId}">
-                                        <i class="credit card icon"></i>
-                                        Pay Now
-                                    </button>
-                                </div>
-                            </div>
-                        `;
-                    } else if (data.status === 'completed') {
-                        // Completed parking UI
-                        const exitTime = new Date(data.exitTimestamp);
-                        const formattedExitTime = exitTime.toLocaleString('en-US', {
-                            year: 'numeric',
-                            month: 'short',
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                            second: '2-digit'
-                        });
-                        
-                        entryElement.style.borderLeft = '4px solid #27ae60';
-                        entryElement.innerHTML = `
-                            <div class="ui green ribbon label">
-                                <i class="check circle icon"></i> Completed
-                            </div>
-                            <div class="ui grid" style="margin-top: 1.5rem;">
-                                <div class="twelve wide column">
-                                    <h3 class="ui header">
-                                        <i class="car icon"></i>
+                    entryElement.style.borderLeft = '4px solid #f39c12';
+                    entryElement.innerHTML = `
+                        <div class="ui orange ribbon label">
+                            <i class="money bill alternate icon"></i> Payment Required
+                        </div>
+                        <div class="ui grid" style="margin-top: 1.5rem;">
+                            <div class="twelve wide column">
+                                <h3 class="ui header">
+                                    <i class="car icon"></i>
                                         <div class="content">
-                                            ${data.licensePlate}
-                                            <div class="sub header">Entry: ${formattedEntryTime}</div>
-                                            <div class="sub header">Exit: ${formattedExitTime}</div>
-                                            <div class="sub header">Duration: ${data.parkingDuration}</div>
-                                            <div class="sub header">Fee: $${data.parkingFee.toFixed(2)}</div>
-                                            <div class="sub header" id="status-${entryId}">Status: <span class="ui green text">Paid & Completed</span></div>
-                                        </div>
-                                    </h3>
-                                </div>
-                                <div class="four wide column" style="display: flex; align-items: center; justify-content: center;">
-                                    <div class="ui green label">
-                                        <i class="check icon"></i> Paid
+                                        ${data.licensePlate}
+                                        <div class="sub header">Entry: ${formattedEntryTime}</div>
+                                        <div class="sub header">Exit: ${formattedExitTime}</div>
+                                        <div class="sub header">Duration: ${data.parkingDuration}</div>
+                                        <div class="sub header">Fee: $${data.parkingFee.toFixed(2)}</div>
+                                        <div class="sub header" id="status-${entryId}">Status: <span class="ui orange text">Awaiting Payment</span></div>
                                     </div>
-                                </div>
+                                </h3>
                             </div>
-                        `;
-                    } else {
-                        // Active parking UI (default)
-                        entryElement.innerHTML = `
-                            <div class="ui ribbon label" style="background-color: #27ae60; color: white;">
-                                <i class="check circle icon"></i> Verified
+                            <div class="four wide column" style="display: flex; align-items: center; justify-content: center;">
+                                <button class="ui orange button pay-button" data-id="${entryId}">
+                                    <i class="credit card icon"></i>
+                                    Pay Now
+                                </button>
                             </div>
-                            <div class="ui grid" style="margin-top: 1.5rem;">
-                                <div class="twelve wide column">
-                                    <h3 class="ui header">
-                                        <i class="car icon"></i>
-                                        <div class="content">
-                                            ${data.licensePlate}
-                                            <div class="sub header">Entry: ${formattedEntryTime}</div>
-                                            <div class="sub header" id="status-${entryId}">Status: <span class="ui green text">${data.status}</span></div>
-                                        </div>
-                                    </h3>
-                                </div>
-                                <div class="four wide column">
-                                    <div class="ui statistic">
-                                        <div class="value" id="timer-${entryId}">Calculating...</div>
-                                        <div class="label">Duration</div>
+                        </div>
+                    `;
+                } else if (data.status === 'completed') {
+                    // Completed parking UI
+                    const exitTime = new Date(data.exitTimestamp);
+                    const formattedExitTime = exitTime.toLocaleString('en-US', {
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        second: '2-digit'
+                    });
+                    
+                    entryElement.style.borderLeft = '4px solid #27ae60';
+                    entryElement.innerHTML = `
+                        <div class="ui green ribbon label">
+                            <i class="check circle icon"></i> Completed
+                        </div>
+                        <div class="ui grid" style="margin-top: 1.5rem;">
+                            <div class="twelve wide column">
+                                <h3 class="ui header">
+                                    <i class="car icon"></i>
+                                    <div class="content">
+                                        ${data.licensePlate}
+                                        <div class="sub header">Entry: ${formattedEntryTime}</div>
+                                        <div class="sub header">Exit: ${formattedExitTime}</div>
+                                        <div class="sub header">Duration: ${data.parkingDuration}</div>
+                                        <div class="sub header">Fee: $${data.parkingFee.toFixed(2)}</div>
+                                        <div class="sub header" id="status-${entryId}">Status: <span class="ui green text">Paid & Completed</span></div>
                                     </div>
+                                </h3>
+                            </div>
+                            <div class="four wide column" style="display: flex; align-items: center; justify-content: center;">
+                                <div class="ui green label">
+                                    <i class="check icon"></i> Paid
                                 </div>
                             </div>
-                        `;
-                    }
-                    
-                    activeParkingList.appendChild(entryElement);
-                    
-                    // Add event listener for payment button if it exists
-                    const payButton = entryElement.querySelector('.pay-button');
-                    if (payButton) {
-                        payButton.addEventListener('click', async () => {
-                            const parkingId = payButton.getAttribute('data-id');
-                            
-                            // Store the parking ID for payment processing
-                            currentPaymentParkingId = parkingId;
-                            
-                            // Open the payment modal
-                            $(paymentModal).modal('show');
-                        });
-                    }
-                    
-                    // Only set up timer for active entries
-                    if (data.status === 'active') {
-                        // Add error handling for the timer
-                        try {
-                            // Set up timer after verification
-                            startTimer(entryId, entryTime);
-                        } catch (timerError) {
-                            console.error('Error starting timer:', timerError);
-                            const timerElement = document.getElementById(`timer-${entryId}`);
-                            if (timerElement) {
-                                timerElement.textContent = 'Error';
-                                timerElement.style.color = 'red';
-                            }
+                        </div>
+                    `;
+                } else {
+                    // Active parking UI (default)
+                    entryElement.innerHTML = `
+                        <div class="ui ribbon label" style="background-color: #27ae60; color: white;">
+                            <i class="check circle icon"></i> Verified
+                        </div>
+                        <div class="ui grid" style="margin-top: 1.5rem;">
+                            <div class="twelve wide column">
+                                <h3 class="ui header">
+                                    <i class="car icon"></i>
+                                    <div class="content">
+                                        ${data.licensePlate}
+                                        <div class="sub header">Entry: ${formattedEntryTime}</div>
+                                        <div class="sub header" id="status-${entryId}">Status: <span class="ui green text">${data.status}</span></div>
+                                    </div>
+                                </h3>
+                            </div>
+                            <div class="four wide column">
+                                <div class="ui statistic">
+                                    <div class="value" id="timer-${entryId}">Calculating...</div>
+                                    <div class="label">Duration</div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                activeParkingList.appendChild(entryElement);
+                
+                // Add event listener for payment button if it exists
+                const payButton = entryElement.querySelector('.pay-button');
+                if (payButton) {
+                    payButton.addEventListener('click', async () => {
+                        const parkingId = payButton.getAttribute('data-id');
+                        
+                        // Store the parking ID for payment processing
+                        currentPaymentParkingId = parkingId;
+                        
+                        // Open the payment modal
+                        $(paymentModal).modal('show');
+                    });
+                }
+                
+                // Only set up timer for active entries
+                if (data.status === 'active') {
+                    // Add error handling for the timer
+                    try {
+                        // Set up timer after verification
+                        startTimer(entryId, entryTime);
+                    } catch (timerError) {
+                        console.error('Error starting timer:', timerError);
+                        const timerElement = document.getElementById(`timer-${entryId}`);
+                        if (timerElement) {
+                            timerElement.textContent = 'Error';
+                            timerElement.style.color = 'red';
                         }
                     }
-                } catch (renderError) {
-                    console.error('Error rendering parking entry:', renderError);
                 }
-            });
+            } catch (renderError) {
+                console.error('Error rendering parking entry:', renderError);
+            }
+        });
         },
 
         createParkingEntryElement(entry) {
@@ -1083,13 +1051,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     };
-
-    // Initialize the parking monitor when auth state changes
-    auth.onAuthStateChanged(user => {
-        if (user) {
-            parkingManager.setupActiveParkingMonitor();
-        }
-    });
 
     // Start timer for a parking entry
     function startTimer(entryId, startTime) {
