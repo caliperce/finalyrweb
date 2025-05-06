@@ -28,10 +28,13 @@ app.use(cors({
         'http://localhost:5500',
         'http://127.0.0.1:5500',
         'http://192.168.90.127:3000',  // College
-        'http://192.168.0.123:3000'    // Home
+        'http://192.168.0.123:3000',   // Home
+        'https://finalyrweb.vercel.app',
+        'https://finalyrweb-dwyt.vercel.app'
     ],
-    methods: ['GET', 'POST'],
-    allowedHeaders: ['Content-Type']
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Accept', 'Cache-Control', 'Pragma'],
+    credentials: true
 }));
 
 // Add cache prevention middleware
@@ -39,6 +42,10 @@ app.use((req, res, next) => {
     res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
     res.set('Expires', '-1');
     res.set('Pragma', 'no-cache');
+    // Ensure JSON content type for API responses
+    if (req.path.startsWith('/latest-entry') || req.path.startsWith('/latest-exit')) {
+        res.set('Content-Type', 'application/json');
+    }
     next();
 });
 

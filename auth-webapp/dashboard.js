@@ -7,20 +7,12 @@ const SERVER_CONFIG = {
     LOCATION_1: 'http://192.168.90.127:3001',  // College
     LOCATION_2: 'http://192.168.0.123:3001',   // Home
     LOCAL: 'http://localhost:3001',            // Local testing
-    VERCEL: 'https://finalyrweb.vercel.app'    // Production
+    VERCEL: 'http://192.168.0.123:3001'        // When deployed, use home server
 };
 
 // Function to get the current server URL from localStorage or default
 function getCurrentServerURL() {
-    // Check if we're running on HTTPS (Vercel)
-    const isHttps = window.location.protocol === 'https:';
-    
-    // If we're on HTTPS, we need to use the Vercel backend
-    if (isHttps) {
-        return 'https://finalyrweb.vercel.app/api';  // Use Vercel's API routes
-    }
-    
-    // For local development (HTTP)
+    // Try to get from localStorage first
     const savedURL = localStorage.getItem('SERVER_URL');
     if (savedURL) return savedURL;
 
@@ -34,7 +26,8 @@ function getCurrentServerURL() {
         return SERVER_CONFIG.LOCAL;       // Local
     }
     
-    return SERVER_CONFIG.LOCATION_2;  // Default
+    // If on Vercel or can't determine, use home server
+    return SERVER_CONFIG.VERCEL;
 }
 
 // Use the server URL from localStorage or auto-detect
@@ -1146,13 +1139,13 @@ async function pollForNewEntries() {
 
         // Add cache-busting parameter and timeout
         const timestamp = new Date().getTime();
-        const apiUrl = getApiUrl('latest-entry');
+        const apiUrl = `${SERVER_URL}/latest-entry`;
         console.log('🔍 Fetching latest entry from:', apiUrl);
         
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
 
-        const response = await fetch(`${apiUrl}?type=latest-entry&v=${timestamp}`, {
+        const response = await fetch(`${apiUrl}?v=${timestamp}`, {
             signal: controller.signal,
             headers: {
                 'Accept': 'application/json',
@@ -1172,6 +1165,8 @@ async function pollForNewEntries() {
 
         const contentType = response.headers.get('content-type');
         if (!contentType || !contentType.includes('application/json')) {
+            const responseText = await response.text();
+            console.error('Non-JSON response:', responseText);
             throw new Error('Server did not return JSON');
         }
 
