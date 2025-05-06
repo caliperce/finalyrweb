@@ -1,5 +1,6 @@
-import { db } from './firebase.js';
-import { collection, query, orderBy, onSnapshot } from "https://www.gstatic.com/firebasejs/11.3.0/firebase-firestore.js";
+// Get Firebase instances from the global scope
+const auth = firebase.auth();
+const db = firebase.firestore();
 
 // Server Configuration
 const SERVER_CONFIG = {
@@ -19,13 +20,12 @@ async function fetchLatestImages(licensePlate) {
         console.log(`🔍 Fetching images for license plate: ${licensePlate}`);
         
         // Query Firebase for the latest parking entry
-        const parkingRef = db.collection('active_parking');
-        const query = parkingRef
+        const parkingRef = db.collection('active_parking')
             .where('licensePlate', '==', licensePlate)
             .orderBy('entryTimestamp', 'desc')
             .limit(1);
             
-        const snapshot = await query.get();
+        const snapshot = await parkingRef.get();
         
         if (snapshot.empty) {
             console.log('❌ No parking entries found for:', licensePlate);
@@ -210,11 +210,11 @@ function loadParkingRecords() {
         parkingRecordsContainer.innerHTML = '<div class="ui active centered inline loader"></div>';
 
         // Set up real-time listener for parking records
-        const parkingRef = collection(db, 'active_parking');
-        const q = query(parkingRef, orderBy('entryTimestamp', 'desc'));
+        const parkingRef = db.collection('active_parking')
+            .orderBy('entryTimestamp', 'desc');
         
         console.log('🔄 Setting up real-time listener...');
-        const unsubscribe = onSnapshot(q, async (querySnapshot) => {
+        const unsubscribe = parkingRef.onSnapshot(async (querySnapshot) => {
             console.log(`📥 Received ${querySnapshot.docs.length} parking records`);
             parkingRecordsContainer.innerHTML = '';
 
