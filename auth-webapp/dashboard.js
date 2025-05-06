@@ -6,7 +6,7 @@ const db = firebase.firestore();
 const SERVER_CONFIG = {
     LOCATION_1: 'http://192.168.90.127:3001',
     LOCATION_2: 'http://192.168.0.123:3001',
-    VERCEL: 'https://your-vercel-url.vercel.app' // Add your Vercel URL here
+    VERCEL: 'https://finalyrweb.vercel.app.vercel.app' // Add your Vercel URL here
 };
 
 // Function to get the current server URL from localStorage or default
