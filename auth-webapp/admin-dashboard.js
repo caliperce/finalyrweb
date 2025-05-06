@@ -8,7 +8,7 @@ const SERVER_CONFIG = {
 };
 
 // Use the appropriate server URL based on your location
-const SERVER_URL = SERVER_CONFIG.LOCATION_1; // Change to LOCATION_2 when needed
+const SERVER_URL = SERVER_CONFIG.LOCATION_2; // Using LOCATION_2 since it's responding
 
 console.log('🔄 Initializing admin dashboard...');
 console.log('🌐 Using server URL:', SERVER_URL);
@@ -18,26 +18,49 @@ async function fetchLatestImages(licensePlate) {
     try {
         console.log(`🔍 Fetching images for license plate: ${licensePlate}`);
         
-        // Fetch entry image
-        const entryResponse = await fetch(`${SERVER_URL}/latest-entry?licensePlate=${licensePlate}`);
-        const entryData = await entryResponse.json();
+        // Query Firebase for the latest parking entry
+        const parkingRef = db.collection('active_parking');
+        const query = parkingRef
+            .where('licensePlate', '==', licensePlate)
+            .orderBy('entryTimestamp', 'desc')
+            .limit(1);
+            
+        const snapshot = await query.get();
         
-        // Fetch exit image
-        const exitResponse = await fetch(`${SERVER_URL}/latest-exit?licensePlate=${licensePlate}`);
-        const exitData = await exitResponse.json();
+        if (snapshot.empty) {
+            console.log('❌ No parking entries found for:', licensePlate);
+            return { entryImageUrl: '', exitImageUrl: '' };
+        }
         
-        console.log('📸 Image URLs fetched:', {
-            entry: entryData.data?.imageUrl,
-            exit: exitData.data?.imageUrl
+        const parkingData = snapshot.docs[0].data();
+        console.log('📸 Image URLs from Firebase:', {
+            entry: parkingData.entryImageUrl,
+            exit: parkingData.exitImageUrl
         });
         
         return {
-            entryImageUrl: entryData.data?.imageUrl || '',
-            exitImageUrl: exitData.data?.imageUrl || ''
+            entryImageUrl: parkingData.entryImageUrl || '',
+            exitImageUrl: parkingData.exitImageUrl || ''
         };
     } catch (error) {
-        console.error('❌ Error fetching images:', error);
+        console.error('❌ Error fetching images from Firebase:', error);
         return { entryImageUrl: '', exitImageUrl: '' };
+    }
+}
+
+// Function to update parking entry images
+async function updateParkingImages(parkingId, { entryImageUrl, exitImageUrl }) {
+    try {
+        const updates = {};
+        if (entryImageUrl) updates.entryImageUrl = entryImageUrl;
+        if (exitImageUrl) updates.exitImageUrl = exitImageUrl;
+        
+        if (Object.keys(updates).length > 0) {
+            await db.collection('active_parking').doc(parkingId).update(updates);
+            console.log('✅ Updated image URLs for parking entry:', parkingId);
+        }
+    } catch (error) {
+        console.error('❌ Error updating parking images:', error);
     }
 }
 

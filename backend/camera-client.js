@@ -47,7 +47,7 @@ async function sendImageToServer(imagePath, endpoint) {
         const formData = new FormData();
         formData.append('image', fs.createReadStream(imagePath));
 
-        const serverUrl = process.env.SERVER_URL ||'http://192.168.90.127:3001'; // Default to original IP if env var not set
+        const serverUrl = process.env.SERVER_URL ||'http://192.168.0.123:3001'; // Default to original IP if env var not set
         console.log(`📤 Sending to ${serverUrl}/${endpoint}`);
 
         const response = await axios.post(`${serverUrl}/${endpoint}`, formData, {

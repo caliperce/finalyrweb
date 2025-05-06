@@ -942,7 +942,7 @@ async function checkLicensePlate(licensePlate) {
 }
 
 // Function to create active parking entry
-async function createActiveParkingEntry(licensePlate, timestamp) {
+async function createActiveParkingEntry(licensePlate, timestamp, imageUrl) {
     try {
         console.log('📝 Creating active parking entry for:', licensePlate);
         
@@ -973,23 +973,23 @@ async function createActiveParkingEntry(licensePlate, timestamp) {
         const existingEntries = await q.get();
         if (!existingEntries.empty) {
             console.log('⚠️ Active entry already exists for license plate:', licensePlate);
-            // No need to create duplicate, this is not an error
             showNotification(`License plate ${licensePlate} already has an active parking entry`, 'warning');
-            return true; // Return true as this is not a failure case
+            return true;
         }
         
-        // Create a new document in active_parking collection
+        // Create a new document in active_parking collection with image URL
         const newParkingDoc = {
             licensePlate: licensePlate,
             entryTimestamp: timestamp,
             status: 'active',
-            createdAt: new Date().toISOString()
+            createdAt: new Date().toISOString(),
+            entryImageUrl: imageUrl || null,  // Store entry image URL
+            exitImageUrl: null  // Initialize exit image URL as null
         };
         
         const docRef = await activeParkingRef.add(newParkingDoc);
         console.log('✅ Created new active parking entry with ID:', docRef.id);
         
-        // Show success notification
         showNotification(`New parking entry created for ${licensePlate}`, 'success');
         return true;
     } catch (error) {
@@ -1214,7 +1214,11 @@ async function pollForExits() {
             // Only process if we haven't seen this exit before
             if (!window.lastProcessedExitTimestamp || window.lastProcessedExitTimestamp !== currentExit.exitTimestamp) {
                 console.log('🆕 New valid exit detected:', currentExit);
-                await handleVehicleExit(currentExit.licensePlate, currentExit.exitTimestamp);
+                // Get the image URL from the response
+                const exitImageUrl = currentExit.imageUrl;
+                console.log('🖼️ Exit image URL:', exitImageUrl);
+                
+                await handleVehicleExit(currentExit.licensePlate, currentExit.exitTimestamp, exitImageUrl);
                 // Update the last processed exit timestamp
                 window.lastProcessedExitTimestamp = currentExit.exitTimestamp;
                 console.log('✅ Updated last processed exit timestamp to:', currentExit.exitTimestamp);
@@ -1230,7 +1234,7 @@ async function pollForExits() {
 }
 
 // Function to handle vehicle exit
-async function handleVehicleExit(licensePlate, exitTimestamp) {
+async function handleVehicleExit(licensePlate, exitTimestamp, exitImageUrl) {
     try {
         console.log('🚗 Processing vehicle exit:', { licensePlate, exitTimestamp });
         
@@ -1246,12 +1250,16 @@ async function handleVehicleExit(licensePlate, exitTimestamp) {
             return false;
         }
         
-        // Update the active parking entry with exit timestamp and hasPaid status
+        // Get the existing parking document
         const parkingDoc = querySnapshot.docs[0];
         const parkingData = parkingDoc.data();
         const parkingId = parkingDoc.id;
         
+        // Keep the existing entry image URL
+        const entryImageUrl = parkingData.entryImageUrl;
+        
         console.log('📝 Updating parking entry:', parkingId);
+        console.log('🖼️ Image URLs:', { entry: entryImageUrl, exit: exitImageUrl });
         
         // Calculate parking duration
         const entryTime = new Date(parkingData.entryTimestamp);
@@ -1275,7 +1283,9 @@ async function handleVehicleExit(licensePlate, exitTimestamp) {
             status: 'pending_payment',
             parkingDuration: formattedDuration,
             parkingDurationMs: durationMs,
-            parkingFee: parkingFee
+            parkingFee: parkingFee,
+            entryImageUrl: entryImageUrl,  // Preserve the entry image URL
+            exitImageUrl: exitImageUrl || null  // Add the exit image URL
         });
         
         console.log('✅ Successfully updated parking entry with exit information');
