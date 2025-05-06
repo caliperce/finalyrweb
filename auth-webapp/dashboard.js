@@ -5,17 +5,50 @@ const db = firebase.firestore();
 // Server Configuration
 const SERVER_CONFIG = {
     LOCATION_1: 'http://192.168.90.127:3001',
-    LOCATION_2: 'http://192.168.0.123:3001'
+    LOCATION_2: 'http://192.168.0.123:3001',
+    VERCEL: 'https://your-vercel-url.vercel.app' // Add your Vercel URL here
 };
 
-// Use the appropriate server URL based on your location
-const SERVER_URL = SERVER_CONFIG.LOCATION_1; // Change to LOCATION_2 when needed
+// Function to get the current server URL from localStorage or default
+function getCurrentServerURL() {
+    return localStorage.getItem('SERVER_URL') || SERVER_CONFIG.LOCATION_2;
+}
+
+// Function to switch server URL
+function switchServerURL(location) {
+    localStorage.setItem('SERVER_URL', SERVER_CONFIG[location]);
+    console.log('🔄 Switched server URL to:', SERVER_CONFIG[location]);
+    // Reload the page to apply changes
+    window.location.reload();
+}
+
+// Use the server URL from localStorage
+const SERVER_URL = getCurrentServerURL();
 
 // Log the server URL for debugging
 console.log('🌐 Using server URL:', SERVER_URL);
 
 document.addEventListener('DOMContentLoaded', () => {
     console.log('Dashboard loaded, checking auth state...');
+    
+    // Initialize server location dropdown
+    const serverLocationSelect = document.getElementById('server-location');
+    if (serverLocationSelect) {
+        // Set initial value based on current server
+        const currentURL = getCurrentServerURL();
+        for (const [key, value] of Object.entries(SERVER_CONFIG)) {
+            if (value === currentURL) {
+                serverLocationSelect.value = key;
+                break;
+            }
+        }
+
+        // Add change event listener
+        serverLocationSelect.addEventListener('change', (e) => {
+            const newLocation = e.target.value;
+            switchServerURL(newLocation);
+        });
+    }
     
     // Get DOM elements
     const userEmailElement = document.getElementById('user-email');
@@ -79,24 +112,10 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     
     // Function to update UI with user data
-    async function updateUI(userData) {
+    function updateUI(userData) {
         console.log('Updating UI with user data:', userData);
         
-        // Display phone number if available
-        if (userData.phoneNumber) {
-            console.log('User phone number:', userData.phoneNumber);
-        } else {
-            console.log('No phone number found, will prompt user to add one');
-            // Show phone number collection modal
-            $('#phone-number-modal').modal({
-                closable: false,
-                onDeny: function() {
-                    return false;
-                }
-            }).modal('show');
-        }
-        
-        // Clear existing license plate list
+        // Clear existing list
         if (licensePlateList) {
             licensePlateList.innerHTML = '';
         }
@@ -132,184 +151,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     addLicenseBtn.classList.remove('disabled');
                 }
             }
-
-            // Check for active parking sessions
-            checkActiveParkingSessions(userData.licensePlates);
         }
-    }
-
-    // Function to check and display active parking sessions
-    async function checkActiveParkingSessions(licensePlates) {
-        if (!licensePlates || !Array.isArray(licensePlates) || licensePlates.length === 0) {
-            if (noActiveParkingElement) {
-                noActiveParkingElement.style.display = 'block';
-            }
-            return;
-        }
-
-        try {
-            if (parkingLoadingElement) {
-                parkingLoadingElement.style.display = 'block';
-            }
-            if (noActiveParkingElement) {
-                noActiveParkingElement.style.display = 'none';
-            }
-
-            // Query active_parking collection for any active sessions
-            const activeParkingRef = db.collection('active_parking');
-            const query = activeParkingRef.where('licensePlate', 'in', licensePlates);
-            
-            // Set up real-time listener for active parking
-            query.onSnapshot((snapshot) => {
-                console.log('Active parking snapshot received:', snapshot.size, 'entries');
-                
-                if (snapshot.empty) {
-                    if (noActiveParkingElement) {
-                        noActiveParkingElement.style.display = 'block';
-                    }
-                    if (activeParkingList) {
-                        activeParkingList.innerHTML = '';
-                        activeParkingList.appendChild(noActiveParkingElement);
-                    }
-                    if (pendingPaymentsSection) {
-                        pendingPaymentsSection.style.display = 'none';
-                    }
-                    return;
-                }
-
-                // Process active parking entries
-                const activeEntries = [];
-                const pendingPayments = [];
-
-                snapshot.forEach((doc) => {
-                    const parkingData = doc.data();
-                    if (parkingData.status === 'active') {
-                        activeEntries.push({ id: doc.id, ...parkingData });
-                    } else if (parkingData.status === 'pending_payment') {
-                        pendingPayments.push({ id: doc.id, ...parkingData });
-                    }
-                });
-
-                // Update UI with active parking entries
-                if (activeParkingList) {
-                    displayActiveParkingEntries(activeEntries);
-                }
-
-                // Update UI with pending payments
-                if (pendingPaymentsSection && pendingPayments.length > 0) {
-                    displayPendingPayments(pendingPayments);
-                }
-            }, (error) => {
-                console.error('Error monitoring active parking:', error);
-                if (parkingErrorElement) {
-                    parkingErrorElement.style.display = 'block';
-                    parkingErrorElement.textContent = `Error loading parking data: ${error.message}`;
-                }
-            });
-
-        } catch (error) {
-            console.error('Error checking active parking sessions:', error);
-            if (parkingErrorElement) {
-                parkingErrorElement.style.display = 'block';
-                parkingErrorElement.textContent = `Error: ${error.message}`;
-            }
-        } finally {
-            if (parkingLoadingElement) {
-                parkingLoadingElement.style.display = 'none';
-            }
-        }
-    }
-
-    // Function to display active parking entries
-    function displayActiveParkingEntries(entries) {
-        if (!activeParkingList) return;
-        
-        activeParkingList.innerHTML = '';
-        
-        entries.forEach(entry => {
-            const entryTime = new Date(entry.entryTimestamp);
-            const formattedTime = entryTime.toLocaleString();
-            
-            const entryElement = document.createElement('div');
-            entryElement.className = 'ui segment active-parking-item';
-            entryElement.innerHTML = `
-                <div class="ui ribbon label" style="background-color: #27ae60; color: white;">
-                    <i class="check circle icon"></i> Active
-                </div>
-                <div class="ui grid" style="margin-top: 1.5rem;">
-                    <div class="twelve wide column">
-                        <h3 class="ui header">
-                            <i class="car icon"></i>
-                            <div class="content">
-                                ${entry.licensePlate}
-                                <div class="sub header">Entry Time: ${formattedTime}</div>
-                                <div class="sub header">Status: Active</div>
-                            </div>
-                        </h3>
-                    </div>
-                    <div class="four wide column">
-                        <div class="ui statistic">
-                            <div class="value" id="timer-${entry.id}">Calculating...</div>
-                            <div class="label">Duration</div>
-                        </div>
-                    </div>
-                </div>
-            `;
-            
-            activeParkingList.appendChild(entryElement);
-            
-            // Start timer for this entry
-            startTimer(entry.id, entryTime);
-        });
-    }
-
-    // Function to display pending payments
-    function displayPendingPayments(payments) {
-        if (!pendingPaymentsSection) return;
-        
-        pendingPaymentsSection.style.display = 'block';
-        const pendingPaymentsList = document.getElementById('pending-payments-list');
-        if (!pendingPaymentsList) return;
-        
-        pendingPaymentsList.innerHTML = '';
-        
-        payments.forEach(payment => {
-            const exitTime = new Date(payment.exitTimestamp);
-            const formattedExitTime = exitTime.toLocaleString();
-            
-            const paymentElement = document.createElement('div');
-            paymentElement.className = 'ui segment';
-            paymentElement.style.borderLeft = '4px solid #f39c12';
-            paymentElement.innerHTML = `
-                <div class="ui grid">
-                    <div class="ten wide column">
-                        <div class="ui orange text" style="font-weight: bold;">${payment.licensePlate}</div>
-                        <div>Exit Time: ${formattedExitTime}</div>
-                        <div>Duration: ${payment.parkingDuration || 'Calculating...'}</div>
-                        <div>Fee: $${(payment.parkingFee || 0).toFixed(2)}</div>
-                    </div>
-                    <div class="six wide column" style="display: flex; align-items: center; justify-content: flex-end;">
-                        <button class="ui orange button pay-button" data-id="${payment.id}">
-                            <i class="credit card icon"></i>
-                            Pay Now
-                        </button>
-                    </div>
-                </div>
-            `;
-            
-            pendingPaymentsList.appendChild(paymentElement);
-            
-            // Add payment button event listener
-            const payButton = paymentElement.querySelector('.pay-button');
-            if (payButton) {
-                payButton.addEventListener('click', () => {
-                    // Store the payment ID
-                    window.currentPaymentParkingId = payment.id;
-                    // Show payment modal
-                    $('#payment-modal').modal('show');
-                });
-            }
-        });
     }
 
     // Function to add license plate
@@ -1221,19 +1063,44 @@ async function pollForNewEntries() {
     try {
         console.log('🔄 Polling for new entries...');
         console.log('🌐 Using server URL:', SERVER_URL);
+        
+        // Get the current user
+        const user = auth.currentUser;
+        if (!user) {
+            console.log('❌ No user logged in');
+            return;
+        }
+
+        // Get user's license plates
+        const userDoc = await db.collection('users').doc(user.uid).get();
+        const userLicensePlates = userDoc.data()?.licensePlates || [];
+
+        if (userLicensePlates.length === 0) {
+            console.log('❌ User has no registered license plates');
+            return;
+        }
+
+        // Add cache-busting parameter
         const timestamp = new Date().getTime();
         const response = await fetch(`${SERVER_URL}/latest-entry?v=${timestamp}`);
+        
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
+        
         const result = await response.json();
         console.log('📥 Received response:', result);
         
         // If we have new data and it hasn't been processed yet
         if (result.success && result.data && result.data.licensePlate) {
-            // Validate the data from the server
             const currentEntry = result.data;
             console.log('📋 Current entry:', currentEntry);
+            
+            // Check if this license plate belongs to the user
+            if (!userLicensePlates.includes(currentEntry.licensePlate)) {
+                console.log('⚠️ License plate not registered to current user:', currentEntry.licensePlate);
+                return;
+            }
             
             // Validate essential fields
             if (!currentEntry.licensePlate || !currentEntry.timestamp) {
@@ -1248,23 +1115,39 @@ async function pollForNewEntries() {
                 return;
             }
             
-            console.log('🕒 Last processed timestamp:', window.lastProcessedTimestamp);
-            
-            // Only process if we haven't seen this entry before
-            if (!window.lastProcessedTimestamp || window.lastProcessedTimestamp !== currentEntry.timestamp) {
+            // Get the last 5 minutes of entries to avoid duplicates
+            const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+            const recentEntriesQuery = await db.collection('active_parking')
+                .where('licensePlate', '==', currentEntry.licensePlate)
+                .where('entryTimestamp', '>', fiveMinutesAgo.toISOString())
+                .get();
+
+            if (recentEntriesQuery.empty) {
                 console.log('🆕 New valid entry detected:', currentEntry);
                 await handleNewParkingEntry(currentEntry.licensePlate, currentEntry.timestamp);
-                // Update the last processed timestamp
-                window.lastProcessedTimestamp = currentEntry.timestamp;
-                console.log('✅ Updated last processed timestamp to:', currentEntry.timestamp);
+                showNotification(`New parking entry detected for ${currentEntry.licensePlate}`, 'success');
             } else {
-                console.log('⏭️ Entry already processed, skipping...');
+                console.log('⏭️ Recent entry already exists, skipping...');
             }
         } else {
             console.log('ℹ️ No new entries to process');
         }
     } catch (error) {
         console.error('❌ Error polling for new entries:', error);
+        // If the error is due to server connection, try switching to alternative server
+        if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+            console.log('🔄 Connection failed, attempting to switch servers...');
+            const currentURL = SERVER_URL;
+            let newLocation = 'LOCATION_2';
+            
+            if (currentURL === SERVER_CONFIG.LOCATION_2) {
+                newLocation = 'LOCATION_1';
+            } else if (currentURL === SERVER_CONFIG.LOCATION_1) {
+                newLocation = 'VERCEL';
+            }
+            
+            switchServerURL(newLocation);
+        }
     }
 }
 
