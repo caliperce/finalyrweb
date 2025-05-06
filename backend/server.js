@@ -70,19 +70,75 @@ app.get('/health', (req, res) => {
 });
 
 // Test endpoint to simulate a license plate detection
-app.get('/test-entry/:licensePlate', (req, res) => {
-    const testData = {
-        success: true,
-        licensePlate: req.params.licensePlate,
-        timestamp: new Date().toISOString(),
-        imageUrl: 'https://my-s3-demo-bucket120d34ec035034aa08ef2893f643caf6f.s3.us-west-1.amazonaws.com/entry/2025-03-20T18:06:20.186Z-capture.jpg'
-    };
-    
-    // Store as latest entry
-    global.latestEntry = testData;
-    
-    console.log('📝 Test entry created:', testData);
-    res.json(testData);
+app.get('/test-entry/:licensePlate', async (req, res) => {
+    try {
+        console.log('🔄 Starting test entry for license plate:', req.params.licensePlate);
+        
+        // First check if there's already an active entry for this license plate
+        const activeParkingRef = db.collection('active_parking');
+        const existingQuery = await activeParkingRef
+            .where('licensePlate', '==', req.params.licensePlate)
+            .where('status', '==', 'active')
+            .get();
+            
+        if (!existingQuery.empty) {
+            console.log('⚠️ Active entry already exists for this license plate');
+            return res.status(400).json({ 
+                success: false, 
+                error: 'Active entry already exists for this license plate' 
+            });
+        }
+
+        const testData = {
+            success: true,
+            licensePlate: req.params.licensePlate,
+            timestamp: new Date().toISOString(),
+            imageUrl: 'https://my-s3-demo-bucket120d34ec035034aa08ef2893f643caf6f.s3.us-west-1.amazonaws.com/entry/2025-03-20T18:06:20.186Z-capture.jpg'
+        };
+        
+        // Store as latest entry
+        global.latestEntry = testData;
+        
+        // Create new parking entry in Firebase
+        const newParkingDoc = {
+            licensePlate: testData.licensePlate,
+            entryTimestamp: testData.timestamp,
+            status: 'active',
+            entryImageUrl: testData.imageUrl,
+            exitImageUrl: null,
+            createdAt: new Date().toISOString()
+        };
+        
+        console.log('📝 Attempting to create new parking document:', newParkingDoc);
+        
+        // Add the document to Firebase
+        try {
+            const docRef = await activeParkingRef.add(newParkingDoc);
+            console.log('✅ Successfully created new parking entry with ID:', docRef.id);
+            
+            // Verify the document was created
+            const createdDoc = await docRef.get();
+            if (!createdDoc.exists) {
+                throw new Error('Document was not created successfully');
+            }
+            
+            console.log('✅ Document verification successful. Data:', createdDoc.data());
+            res.json({
+                ...testData,
+                parkingId: docRef.id
+            });
+        } catch (firebaseError) {
+            console.error('❌ Firebase operation failed:', firebaseError);
+            throw new Error(`Firebase operation failed: ${firebaseError.message}`);
+        }
+    } catch (error) {
+        console.error('❌ Error in test-entry endpoint:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: error.message,
+            details: 'Error creating parking entry in Firebase'
+        });
+    }
 });
 
 // Test endpoint to simulate a vehicle exit
@@ -365,33 +421,63 @@ app.post('/upload/entry', upload.single('image'), async (req, res) => {
             const licensePlate = analysisObj.license_plate;
             console.log('🔍 License plate detected:', licensePlate);
             
-            // Create new parking entry in Firebase with image URL
+            // Check if there's already an active entry for this license plate
             const activeParkingRef = db.collection('active_parking');
+            const existingQuery = await activeParkingRef
+                .where('licensePlate', '==', licensePlate)
+                .where('status', '==', 'active')
+                .get();
+                
+            if (!existingQuery.empty) {
+                console.log('⚠️ Active entry already exists for this license plate');
+                return res.status(400).json({ 
+                    success: false, 
+                    error: 'Active entry already exists for this license plate' 
+                });
+            }
+            
+            // Create new parking entry in Firebase with image URL
             const newParkingDoc = {
                 licensePlate: licensePlate,
                 entryTimestamp: result.timestamp,
                 status: 'active',
-                entryImageUrl: result.imageUrl,  // Store the entry image URL
+                entryImageUrl: result.imageUrl,
                 exitImageUrl: null,
                 createdAt: new Date().toISOString()
             };
             
+            console.log('📝 Attempting to create new parking document:', newParkingDoc);
+            
             // Add the document to Firebase
-            await activeParkingRef.add(newParkingDoc);
-            console.log('✅ Created new parking entry in Firebase with image URL');
-            
-            const responseData = {
-                success: true,
-                licensePlate,
-                timestamp: result.timestamp,
-                imageUrl: result.imageUrl
-            };
-            
-            // Store the latest entry globally
-            global.latestEntry = responseData;
-            
-            console.log('📤 Sending response to frontend:', responseData);
-            res.json(responseData);
+            try {
+                const docRef = await activeParkingRef.add(newParkingDoc);
+                console.log('✅ Successfully created new parking entry with ID:', docRef.id);
+                
+                // Verify the document was created
+                const createdDoc = await docRef.get();
+                if (!createdDoc.exists) {
+                    throw new Error('Document was not created successfully');
+                }
+                
+                console.log('✅ Document verification successful. Data:', createdDoc.data());
+                
+                const responseData = {
+                    success: true,
+                    licensePlate,
+                    timestamp: result.timestamp,
+                    imageUrl: result.imageUrl,
+                    parkingId: docRef.id
+                };
+                
+                // Store the latest entry globally
+                global.latestEntry = responseData;
+                
+                console.log('📤 Sending response to frontend:', responseData);
+                res.json(responseData);
+            } catch (firebaseError) {
+                console.error('❌ Firebase operation failed:', firebaseError);
+                throw new Error(`Firebase operation failed: ${firebaseError.message}`);
+            }
         } catch (processError) {
             console.error('❌ Error in processImage:', processError);
             res.status(500).json({ 
@@ -401,7 +487,10 @@ app.post('/upload/entry', upload.single('image'), async (req, res) => {
         }
     } catch (error) {
         console.error('❌ Error processing entry image:', error);
-        res.status(500).json({ error: 'Failed to process entry image' });
+        res.status(500).json({ 
+            error: 'Failed to process entry image',
+            details: error.message 
+        });
     }
 });
 
