@@ -45,14 +45,6 @@
             // Test Firebase auth
             const auth = firebase.auth();
             console.log('Firebase auth initialized:', auth);
-
-            // Check if user is already logged in
-            auth.onAuthStateChanged((user) => {
-                if (user) {
-                    console.log('👤 User already logged in, redirecting to dashboard...');
-                    window.location.replace('dashboard.html');
-                }
-            });
         } catch (error) {
             console.error('Error initializing Firebase:', error);
         }
