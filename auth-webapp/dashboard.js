@@ -4,9 +4,9 @@ const db = firebase.firestore();
 
 // Server Configuration
 const SERVER_CONFIG = {
-    LOCAL: 'http://localhost:3001',            // Local testing
-    HOME: 'http://192.168.0.123:3001',        // Home network
-    COLLEGE: 'http://192.168.90.127:3001'     // College network
+    HOME: 'http://192.168.0.123:3001',        // Home network (default)
+    COLLEGE: 'http://192.168.90.127:3001',    // College network
+    LOCAL: 'http://localhost:3001'            // Local testing
 };
 
 // Function to get the current server URL from localStorage or default
@@ -15,8 +15,8 @@ function getCurrentServerURL() {
     const savedURL = localStorage.getItem('SERVER_URL');
     if (savedURL) return savedURL;
     
-    // Default to localhost
-    return SERVER_CONFIG.LOCAL;
+    // Default to home network
+    return SERVER_CONFIG.HOME;
 }
 
 // Function to get API URL based on environment
@@ -77,7 +77,7 @@ document.addEventListener('DOMContentLoaded', () => {
             setupExitListener();
         });
     }
-
+    
     // Get DOM elements
     const userEmailElement = document.getElementById('user-email');
     const licensePlateList = document.getElementById('license-plate-list');
@@ -1053,7 +1053,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     };
-
+    
     // Start timer for a parking entry
     function startTimer(entryId, startTime) {
         const timerElement = document.getElementById(`timer-${entryId}`);
